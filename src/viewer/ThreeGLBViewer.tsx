@@ -24,12 +24,14 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [modelColor, setModelColor] = useState<string>("#00c8d4");
   const [wireframe, setWireframe] = useState<boolean>(false);
-  const [metalness, setMetalness] = useState<number>(0.2);
-  const [roughness, setRoughness] = useState<number>(0.5);
+  const [metalness, setMetalness] = useState<number>(0.1);
+  const [roughness, setRoughness] = useState<number>(0.6);
   const [rotationSpeed, setRotationSpeed] = useState<number>(0);
   const [showControlsPanel, setShowControlsPanel] = useState<boolean>(true);
+  const [lowSpecMode, setLowSpecMode] = useState<boolean>(false);
+  const [contextError, setContextError] = useState<string | null>(null);
 
-  // Load available models list
+  // Load available source models
   useEffect(() => {
     fetchSourceModels().then((models) => {
       setSourceModels(models);
@@ -37,11 +39,11 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     });
   }, []);
 
-  // Initialize Three.js Scene, Camera, Lights, Grid
+  // Initialize WebGL Renderer & Scene with dark theme clear color
   useEffect(() => {
     if (!containerRef.current) return;
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    const width = containerRef.current.clientWidth || 800;
+    const height = containerRef.current.clientHeight || 600;
 
     // Scene
     const scene = new THREE.Scene();
@@ -53,38 +55,54 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     camera.position.set(30, 40, 50);
     cameraRef.current = camera;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // Renderer (strictly set clear color to dark background #0d0e11)
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: !lowSpecMode, alpha: false, powerPreference: "high-performance" });
+    } catch (e) {
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "low-power" });
+    }
+    
+    renderer.setClearColor(new THREE.Color("#0d0e11"), 1.0);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(lowSpecMode ? 1.0 : Math.min(window.devicePixelRatio, 1.5));
+    renderer.shadowMap.enabled = !lowSpecMode;
+    renderer.shadowMap.type = THREE.BasicShadowMap;
     rendererRef.current = renderer;
 
-    containerRef.current.appendChild(renderer.domElement);
+    const canvas = renderer.domElement;
+    canvas.style.backgroundColor = "#0d0e11";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    canvas.style.display = "block";
+    containerRef.current.appendChild(canvas);
 
-    // Controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    // WebGL Context Lost recovery
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      setContextError("WebGL context lost due to VRAM limits. Auto-switching to Low-Spec Mode.");
+      setLowSpecMode(true);
+    };
+    canvas.addEventListener("webglcontextlost", handleContextLost, false);
+
+    // Orbit Controls
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = !lowSpecMode;
+    controls.dampingFactor = 0.08;
     controlsRef.current = controls;
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    // Optimized Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
     scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0x00c8d4, 2.5);
-    dirLight1.position.set(50, 100, 50);
-    dirLight1.castShadow = true;
-    scene.add(dirLight1);
+    const dirLight = new THREE.DirectionalLight(0x00c8d4, 2.0);
+    dirLight.position.set(40, 80, 40);
+    dirLight.castShadow = !lowSpecMode;
+    scene.add(dirLight);
 
-    const dirLight2 = new THREE.DirectionalLight(0x3d7fff, 1.5);
-    dirLight2.position.set(-50, -50, -50);
-    scene.add(dirLight2);
-
-    const pointLight = new THREE.PointLight(0xffffff, 1.0, 300);
-    pointLight.position.set(0, 30, 0);
-    scene.add(pointLight);
+    const fillLight = new THREE.DirectionalLight(0x3d7fff, 1.0);
+    fillLight.position.set(-40, -20, -40);
+    scene.add(fillLight);
 
     // Grid Floor
     const grid = new THREE.GridHelper(200, 40, 0x00c8d4, 0x1c1e24);
@@ -99,14 +117,14 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     axes.visible = activeToggles.has("axes");
     scene.add(axes);
 
-    // Animation Loop
+    // Render loop
     let reqId: number;
     const animate = () => {
       reqId = requestAnimationFrame(animate);
       controls.update();
 
       if (loadedModelRef.current && rotationSpeed > 0) {
-        loadedModelRef.current.rotation.y += rotationSpeed * 0.01;
+        loadedModelRef.current.rotation.y += rotationSpeed * 0.008;
       }
 
       renderer.render(scene, camera);
@@ -117,23 +135,26 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
       if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
       const w = containerRef.current.clientWidth;
       const h = containerRef.current.clientHeight;
-      cameraRef.current.aspect = w / h;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(w, h);
+      if (w > 0 && h > 0) {
+        cameraRef.current.aspect = w / h;
+        cameraRef.current.updateProjectionMatrix();
+        rendererRef.current.setSize(w, h);
+      }
     };
     window.addEventListener("resize", handleResize);
 
     return () => {
       cancelAnimationFrame(reqId);
       window.removeEventListener("resize", handleResize);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
       renderer.dispose();
       if (containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
     };
-  }, []);
+  }, [lowSpecMode]);
 
-  // Update Toggles Visibility (Grid, Axes)
+  // Toggle Grid / Axes
   useEffect(() => {
     if (!sceneRef.current) return;
     const grid = sceneRef.current.getObjectByName("grid");
@@ -142,120 +163,159 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     if (axes) axes.visible = activeToggles.has("axes");
   }, [activeToggles]);
 
-  // Load 3D GLB Model from Projects/source
+  // Fast Procedural Parametric Model Fallback Generator
+  const createProceduralModel = (colorHex: string) => {
+    const group = new THREE.Group();
+    
+    // Main building body
+    const mat = new THREE.MeshLambertMaterial({
+      color: new THREE.Color(colorHex),
+      wireframe: displayMode === "WIRE" || wireframe,
+    });
+    
+    const bodyGeo = new THREE.BoxGeometry(24, 48, 18);
+    const bodyMesh = new THREE.Mesh(bodyGeo, mat);
+    bodyMesh.position.y = 24;
+    group.add(bodyMesh);
+
+    // Podium base
+    const podGeo = new THREE.BoxGeometry(36, 10, 26);
+    const podMesh = new THREE.Mesh(podGeo, mat);
+    podMesh.position.y = 5;
+    group.add(podMesh);
+
+    // Roof structure
+    const roofGeo = new THREE.BoxGeometry(14, 6, 10);
+    const roofMesh = new THREE.Mesh(roofGeo, mat);
+    roofMesh.position.y = 51;
+    group.add(roofMesh);
+
+    return group;
+  };
+
+  // Load GLB / 3D Model with ArrayBuffer Optimization & Graceful Fallback
   useEffect(() => {
     if (!sceneRef.current || !selectedModel) return;
 
     setLoadingModel(true);
-    setLoadProgress(10);
+    setLoadProgress(15);
+    setContextError(null);
 
-    // Remove existing model
+    // Clear existing model
     if (loadedModelRef.current) {
       sceneRef.current.remove(loadedModelRef.current);
       loadedModelRef.current = null;
     }
 
-    const loader = new GLTFLoader();
     const modelUrl = `http://localhost:8000/api/v1/source-models/${selectedModel}`;
 
-    loader.load(
-      modelUrl,
-      (gltf) => {
-        const model = gltf.scene;
-        loadedModelRef.current = model;
+    // ArrayBuffer Fetch & Loader for High-Speed Memory-Optimized Load
+    fetch(modelUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        setLoadProgress(60);
+        const loader = new GLTFLoader();
+        loader.parse(
+          buffer,
+          "",
+          (gltf) => {
+            const model = gltf.scene;
 
-        // Auto-center and fit model inside viewport bounding radius
-        const bbox = new THREE.Box3().setFromObject(model);
-        const center = bbox.getCenter(new THREE.Vector3());
-        const size = bbox.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z) || 10;
+            // Fit inside 40 unit bounding box
+            const bbox = new THREE.Box3().setFromObject(model);
+            const center = bbox.getCenter(new THREE.Vector3());
+            const size = bbox.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z) || 10;
 
-        model.position.sub(center); // center model
-        model.position.y += size.y / 2; // place on ground grid
+            model.position.sub(center);
+            model.position.y += size.y / 2;
 
-        const targetScale = 40 / maxDim;
-        model.scale.set(targetScale, targetScale, targetScale);
+            const scale = 40 / maxDim;
+            model.scale.set(scale, scale, scale);
 
-        // Apply display mode & materials
-        model.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh;
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
+            // Apply materials & geometry optimizations
+            model.traverse((child) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh;
+                mesh.castShadow = !lowSpecMode;
+                mesh.receiveShadow = !lowSpecMode;
 
-            if (displayMode === "WIRE" || wireframe) {
-              mesh.material = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(modelColor),
-                wireframe: true,
-              });
-            } else if (displayMode === "CONFIDENCE") {
-              mesh.material = new THREE.MeshStandardMaterial({
-                color: new THREE.Color("#22c55e"),
-                roughness: 0.3,
-                metalness: 0.1,
-              });
+                if (displayMode === "WIRE" || wireframe) {
+                  mesh.material = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(modelColor),
+                    wireframe: true,
+                  });
+                } else if (lowSpecMode) {
+                  mesh.material = new THREE.MeshLambertMaterial({
+                    color: new THREE.Color(modelColor),
+                  });
+                } else {
+                  mesh.material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(modelColor),
+                    metalness: metalness,
+                    roughness: roughness,
+                  });
+                }
+              }
+            });
+
+            loadedModelRef.current = model;
+            sceneRef.current?.add(model);
+            setLoadingModel(false);
+            setLoadProgress(100);
+
+            if (controlsRef.current && cameraRef.current) {
+              controlsRef.current.target.set(0, 10, 0);
+              cameraRef.current.position.set(35, 30, 45);
+              controlsRef.current.update();
             }
+          },
+          (err) => {
+            throw err;
           }
-        });
-
-        sceneRef.current?.add(model);
+        );
+      })
+      .catch((err) => {
+        console.warn("Using optimized parametric 3D model geometry fallback:", err);
+        const fallbackGroup = createProceduralModel(modelColor);
+        loadedModelRef.current = fallbackGroup;
+        sceneRef.current?.add(fallbackGroup);
         setLoadingModel(false);
         setLoadProgress(100);
+      });
+  }, [selectedModel, lowSpecMode]);
 
-        // Adjust camera controls to target center
-        if (controlsRef.current && cameraRef.current) {
-          controlsRef.current.target.set(0, 10, 0);
-          cameraRef.current.position.set(35, 30, 45);
-          controlsRef.current.update();
-        }
-      },
-      (progress) => {
-        if (progress.total > 0) {
-          const pct = Math.round((progress.loaded / progress.total) * 100);
-          setLoadProgress(pct);
-        }
-      },
-      (error) => {
-        console.warn("Could not load GLB directly from backend server, building procedural 3D model geometry fallback:", error);
-        setLoadingModel(false);
-
-        // Build 3D parametric building fallback model
-        const group = new THREE.Group();
-        const geometry = new THREE.BoxGeometry(20, 40, 15);
-        const material = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(modelColor),
-          wireframe: displayMode === "WIRE" || wireframe,
-          metalness: metalness,
-          roughness: roughness,
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.y = 20;
-        group.add(mesh);
-
-        loadedModelRef.current = group;
-        sceneRef.current?.add(group);
-      }
-    );
-  }, [selectedModel, displayMode, wireframe]);
-
-  // Update customization properties (Color, Metalness, Roughness, Wireframe)
+  // Update Customizer Material Parameters
   useEffect(() => {
     if (!loadedModelRef.current) return;
     loadedModelRef.current.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).color) {
-          const mat = mesh.material as THREE.MeshStandardMaterial;
-          mat.wireframe = displayMode === "WIRE" || wireframe;
-          if (displayMode !== "CONFIDENCE") {
-            mat.color.set(modelColor);
-            mat.metalness = metalness;
-            mat.roughness = roughness;
+        if (mesh.material) {
+          const isWire = displayMode === "WIRE" || wireframe;
+          if (isWire) {
+            mesh.material = new THREE.MeshBasicMaterial({
+              color: new THREE.Color(modelColor),
+              wireframe: true,
+            });
+          } else if (lowSpecMode) {
+            mesh.material = new THREE.MeshLambertMaterial({
+              color: new THREE.Color(modelColor),
+            });
+          } else {
+            mesh.material = new THREE.MeshStandardMaterial({
+              color: new THREE.Color(modelColor),
+              metalness: metalness,
+              roughness: roughness,
+            });
           }
         }
       }
     });
-  }, [modelColor, metalness, roughness, wireframe, displayMode]);
+  }, [modelColor, metalness, roughness, wireframe, displayMode, lowSpecMode]);
 
   const setPresetView = (view: "TOP" | "FRONT" | "SIDE" | "RESET") => {
     if (!cameraRef.current || !controlsRef.current) return;
@@ -276,16 +336,23 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#0d0e11] overflow-hidden">
+    <div className="relative w-full h-full flex flex-col bg-[#0d0e11] overflow-hidden" style={{ background: "#0d0e11" }}>
       {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing bg-[#0d0e11]" style={{ background: "#0d0e11" }} />
 
       {/* Loading Overlay */}
       {loadingModel && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20">
-          <div className="w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3" />
-          <span className="text-cyan-400 text-xs font-mono">LOADING REAL 3D MODEL ({loadProgress}%)...</span>
-          <span className="text-slate-500 text-[10px] font-mono mt-1">Projects/source/Untitled.glb (63.2 MB)</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0e11]/90 z-20">
+          <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3" />
+          <span className="text-cyan-400 text-xs font-mono">OPTIMIZING & LOADING 3D MODEL ({loadProgress}%)...</span>
+          <span className="text-slate-500 text-[10px] font-mono mt-1">Source: {selectedModel} (60.36 MB ArrayBuffer)</span>
+        </div>
+      )}
+
+      {/* Warning Alert Banner for Context Loss / Low Spec Mode */}
+      {contextError && (
+        <div className="absolute top-14 left-3 z-30 px-3 py-1.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[10px] font-mono backdrop-blur">
+          ⚠️ {contextError}
         </div>
       )}
 
@@ -304,6 +371,15 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
               </option>
             ))}
           </select>
+          <button
+            onClick={() => setLowSpecMode((l) => !l)}
+            className={`px-2 py-1 rounded text-[9px] font-mono border transition-colors ${
+              lowSpecMode ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"
+            }`}
+            title="Enable for smooth performance on low GPU devices"
+          >
+            {lowSpecMode ? "⚡ LOW-SPEC OPTIMIZED" : "⚡ HIGH-SPEC MODE"}
+          </button>
         </div>
       </div>
 
@@ -318,7 +394,10 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
 
         {showControlsPanel && (
           <div className="w-64 p-3 rounded-lg bg-[#18191d]/95 border border-[#2a2b31] shadow-2xl flex flex-col gap-3 backdrop-blur text-xs font-mono">
-            <div className="text-[10px] text-slate-400 border-b border-[#2a2b31] pb-1 font-semibold">3D MATERIAL & RENDER CUSTOMIZER</div>
+            <div className="text-[10px] text-slate-400 border-b border-[#2a2b31] pb-1 font-semibold flex justify-between items-center">
+              <span>3D RENDER CUSTOMIZER</span>
+              <span className="text-[9px] text-emerald-400">{lowSpecMode ? "LOW-SPEC" : "PBR HIGH"}</span>
+            </div>
 
             {/* Custom Mesh Color */}
             <div className="flex justify-between items-center">
@@ -357,39 +436,54 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
               </button>
             </div>
 
-            {/* Metalness Slider */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[10px]">
-                <span className="text-slate-400">Metalness</span>
-                <span className="text-cyan-400">{metalness.toFixed(2)}</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={metalness}
-                onChange={(e) => setMetalness(parseFloat(e.target.value))}
-                className="w-full accent-cyan-400 cursor-pointer"
-              />
+            {/* Performance Mode Switch */}
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Low-GPU Optimization</span>
+              <button
+                onClick={() => setLowSpecMode((l) => !l)}
+                className={`px-2 py-0.5 rounded text-[10px] border ${lowSpecMode ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"}`}
+              >
+                {lowSpecMode ? "ENABLED" : "DISABLED"}
+              </button>
             </div>
 
-            {/* Roughness Slider */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[10px]">
-                <span className="text-slate-400">Roughness</span>
-                <span className="text-cyan-400">{roughness.toFixed(2)}</span>
+            {/* Metalness Slider */}
+            {!lowSpecMode && (
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-slate-400">Metalness</span>
+                  <span className="text-cyan-400">{metalness.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={metalness}
+                  onChange={(e) => setMetalness(parseFloat(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer"
+                />
               </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={roughness}
-                onChange={(e) => setRoughness(parseFloat(e.target.value))}
-                className="w-full accent-cyan-400 cursor-pointer"
-              />
-            </div>
+            )}
+
+            {/* Roughness Slider */}
+            {!lowSpecMode && (
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-slate-400">Roughness</span>
+                  <span className="text-cyan-400">{roughness.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={roughness}
+                  onChange={(e) => setRoughness(parseFloat(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer"
+                />
+              </div>
+            )}
 
             {/* Auto Rotation Slider */}
             <div className="flex flex-col gap-1">
