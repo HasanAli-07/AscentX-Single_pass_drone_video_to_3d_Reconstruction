@@ -20,20 +20,24 @@ export async function fetchHealth(): Promise<{ status: string; gpu_available: bo
 }
 
 export async function fetchSourceModels(): Promise<SourceModelInfo[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/source-models`);
-    if (res.ok) return await res.json();
-  } catch (e) {
-    console.warn("Using fallback source models list");
-  }
-  return [
+  const defaultModels: SourceModelInfo[] = [
     {
       filename: "Untitled.glb",
       name: "Source Project 3D Scan (Untitled.glb)",
-      size_mb: 63.29,
+      size_mb: 60.36,
       download_url: `${API_BASE_URL}/source-models/Untitled.glb`,
     },
   ];
+  try {
+    const res = await fetch(`${API_BASE_URL}/source-models`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch (e) {
+    console.warn("Using default source models list");
+  }
+  return defaultModels;
 }
 
 export async function fetchProjects(): Promise<Project[]> {
