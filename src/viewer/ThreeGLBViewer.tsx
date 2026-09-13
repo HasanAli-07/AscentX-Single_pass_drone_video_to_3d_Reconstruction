@@ -101,7 +101,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     });
   };
 
-  // Initialize Three.js Scene, Camera, Lights, Renderer with WebGL Context Loss Recovery
+  // Initialize Three.js Scene, Camera, Lights, Renderer ONCE on mount with WebGL Context Loss Recovery
   useEffect(() => {
     if (!containerRef.current) return;
     const width = containerRef.current.clientWidth || 800;
@@ -117,18 +117,14 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     camera.position.set(40, 30, 50);
     cameraRef.current = camera;
 
-    // WebGL Renderer Optimization Flags
-    const isUltraLow = qualityPreset === "ULTRA_LOW";
-    const isLow = qualityPreset === "LOW" || isUltraLow;
-    const isHigh = qualityPreset === "HIGH";
-
+    // Create WebGL Renderer ONCE
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: isHigh,
+        antialias: false,
         alpha: false,
-        powerPreference: isUltraLow ? "low-power" : "high-performance",
-        precision: isUltraLow ? "lowp" : isLow ? "mediump" : "highp",
+        powerPreference: "high-performance",
+        precision: "mediump",
         stencil: false,
         depth: true,
         preserveDrawingBuffer: false,
@@ -139,15 +135,11 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
 
     renderer.setClearColor(new THREE.Color("#0d0e11"), 1.0);
     renderer.setSize(width, height);
-
-    // Adaptive Resolution Scaling (low-spec GPUs render at 0.75x or 1.0x native pixels)
-    const pixelScale = isUltraLow ? 0.75 : isLow ? 1.0 : Math.min(window.devicePixelRatio, 1.5);
-    renderer.setPixelRatio(pixelScale);
-    renderer.shadowMap.enabled = isHigh;
+    renderer.setPixelRatio(1.0);
+    renderer.shadowMap.enabled = false;
 
     // Report hardware GPU cap
     setMaxTextureSize(renderer.capabilities.maxTextureSize || 4096);
-
     rendererRef.current = renderer;
 
     const canvas = renderer.domElement;
@@ -167,7 +159,6 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     const handleContextRestored = () => {
       console.log("WebGL Context Restored! Re-building 3D viewport...");
       setWebglContextLost(false);
-      setQualityPreset("ULTRA_LOW");
     };
 
     canvas.addEventListener("webglcontextlost", handleContextLost, false);
@@ -175,26 +166,26 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
 
     // Orbit Controls
     const controls = new OrbitControls(camera, canvas);
-    controls.enableDamping = !isUltraLow;
+    controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxDistance = 3000;
     controls.minDistance = 0.2;
     controlsRef.current = controls;
 
-    // Dynamic Lighting Setup (Optimized for low-spec GPUs)
-    const ambientLight = new THREE.AmbientLight(0xffffff, isLow ? 2.2 : 1.8);
+    // Dynamic Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+    ambientLight.name = "ambientLight";
     scene.add(ambientLight);
 
-    const mainDirLight = new THREE.DirectionalLight(0xffffff, isLow ? 1.5 : 2.2);
+    const mainDirLight = new THREE.DirectionalLight(0xffffff, 1.8);
     mainDirLight.position.set(100, 200, 100);
-    mainDirLight.castShadow = isHigh;
+    mainDirLight.name = "mainDirLight";
     scene.add(mainDirLight);
 
-    if (!isLow) {
-      const fillLight = new THREE.DirectionalLight(0x00c8d4, 1.2);
-      fillLight.position.set(-100, 50, -100);
-      scene.add(fillLight);
-    }
+    const fillLight = new THREE.DirectionalLight(0x00c8d4, 1.0);
+    fillLight.position.set(-100, 50, -100);
+    fillLight.name = "fillLight";
+    scene.add(fillLight);
 
     // Grid Floor
     const grid = new THREE.GridHelper(300, 60, 0x00c8d4, 0x1c1e24);
@@ -213,11 +204,6 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     let reqId: number;
     let lastTime = performance.now();
     let frameCount = 0;
-    let isInteracting = false;
-
-    controls.addEventListener("change", () => {
-      isInteracting = true;
-    });
 
     const animate = () => {
       reqId = requestAnimationFrame(animate);
@@ -238,14 +224,16 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         // Auto-switch to Low-Spec Mode if FPS drops below 25
         if (autoFpsOptimize && fps < 25 && qualityPreset !== "ULTRA_LOW") {
           console.warn(`Performance drop detected (${fps} FPS). Auto-downgrading quality preset.`);
-          if (qualityPreset === "HIGH") setQualityPreset("BALANCED");
-          else if (qualityPreset === "BALANCED") setQualityPreset("LOW");
-          else if (qualityPreset === "LOW") setQualityPreset("ULTRA_LOW");
+          setQualityPreset((prev) => {
+            if (prev === "HIGH") return "BALANCED";
+            if (prev === "BALANCED") return "LOW";
+            if (prev === "LOW") return "ULTRA_LOW";
+            return prev;
+          });
         }
 
         frameCount = 0;
         lastTime = now;
-        isInteracting = false;
       }
 
       // Render scene
@@ -275,7 +263,23 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         containerRef.current.removeChild(renderer.domElement);
       }
     };
-  }, [qualityPreset, autoFpsOptimize]);
+  }, []); // Mount ONCE to prevent WebGL Context teardown
+
+  // Apply Quality Preset Updates Dynamically Without Re-creating WebGL Context
+  useEffect(() => {
+    if (!rendererRef.current) return;
+    const isUltraLow = qualityPreset === "ULTRA_LOW";
+    const isLow = qualityPreset === "LOW" || isUltraLow;
+    const isHigh = qualityPreset === "HIGH";
+
+    const pixelScale = isUltraLow ? 0.75 : isLow ? 1.0 : Math.min(window.devicePixelRatio, 1.5);
+    rendererRef.current.setPixelRatio(pixelScale);
+    rendererRef.current.shadowMap.enabled = isHigh;
+
+    if (controlsRef.current) {
+      controlsRef.current.enableDamping = !isUltraLow;
+    }
+  }, [qualityPreset]);
 
   // Toggle Grid / Axes
   useEffect(() => {
@@ -537,8 +541,11 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
             GPU memory limit reached on low configuration device. Re-initializing lightweight rendering mode...
           </p>
           <button
-            onClick={() => setQualityPreset("ULTRA_LOW")}
-            className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-mono hover:bg-cyan-500/30"
+            onClick={() => {
+              setWebglContextLost(false);
+              setQualityPreset("ULTRA_LOW");
+            }}
+            className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-mono hover:bg-cyan-500/30 cursor-pointer"
           >
             FORCE RECOVERY (ULTRA LOW SPEC)
           </button>
