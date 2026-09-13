@@ -7,6 +7,13 @@ import { MeshViewport } from "./viewer/MeshViewport";
 import { SectionHeader, StatRow, Badge, Btn } from "./components/SharedPrimitives";
 import { fetchHealth, fetchProjects } from "./services/api";
 
+import { ProjectWorkspace } from "./pages/ProjectWorkspace";
+import { InputWorkspace } from "./pages/InputWorkspace";
+import { FrameWorkspace } from "./pages/FrameWorkspace";
+import { ReconstructionWorkspace } from "./pages/ReconstructionWorkspace";
+import { GeorefWorkspace } from "./pages/GeorefWorkspace";
+import { ExportWorkspace } from "./pages/ExportWorkspace";
+
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>("project");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("TEXTURED");
@@ -36,6 +43,29 @@ export default function App() {
     });
   };
 
+  const renderActiveWorkspace = () => {
+    switch (activeSection) {
+      case "project":
+        return <ProjectWorkspace project={activeProject} onNavigate={setActiveSection} />;
+      case "input":
+        return <InputWorkspace />;
+      case "frames":
+        return <FrameWorkspace />;
+      case "reconstruction":
+        return <ReconstructionWorkspace />;
+      case "georef":
+        return <GeorefWorkspace />;
+      case "export":
+        return <ExportWorkspace />;
+      case "visualization":
+      case "analysis":
+      case "measurements":
+      case "reports":
+      default:
+        return <MeshViewport displayMode={displayMode} activeToggles={activeToggles} />;
+    }
+  };
+
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden text-slate-200" style={{ background: "#0d0e11" }}>
       {/* Header Bar */}
@@ -54,14 +84,13 @@ export default function App() {
         {/* Left Workflow Pipeline Sidebar */}
         <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
 
-        {/* Central 3D Canvas / Viewport */}
-        <main className="flex-1 relative flex flex-col overflow-hidden">
-          <MeshViewport displayMode={displayMode} activeToggles={activeToggles} />
+        {/* Central Dynamic Workspace Panel */}
+        <main className="flex-1 relative flex flex-col overflow-hidden bg-[#0d0e11]">
+          {renderActiveWorkspace()}
         </main>
 
         {/* Right Sidebar Inspector Panel */}
         <aside className="w-80 border-l flex flex-col flex-shrink-0 overflow-y-auto p-4 gap-4" style={{ background: "#131418", borderColor: "#2a2b31" }}>
-          {/* Active Project & API Status Card */}
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
             <div className="flex items-center justify-between mb-2">
               <span className="stat-label" style={{ color: "#4a4d5a" }}>PROJECT METRIC SUMMARY</span>
@@ -75,7 +104,6 @@ export default function App() {
             <StatRow label="Dense Cloud" value="4.2M pts" accent />
           </div>
 
-          {/* Quick Action Controls */}
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
             <SectionHeader title="STAGE CONTROLS" />
             <div className="flex flex-col gap-2 mt-2">
@@ -85,7 +113,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Reconstruction Confidence Overview */}
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
             <SectionHeader title="RECONSTRUCTION CONFIDENCE" />
             <div className="flex flex-col gap-2 mt-2">
@@ -110,7 +137,7 @@ export default function App() {
         </aside>
       </div>
 
-      {/* Bottom Processing & Log Console */}
+      {/* Bottom Processing Console */}
       <Console />
     </div>
   );
