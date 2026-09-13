@@ -17,21 +17,23 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const loadedModelRef = useRef<THREE.Group | THREE.Object3D | null>(null);
-  
+  const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
+
   const [sourceModels, setSourceModels] = useState<SourceModelInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("Untitled.glb");
   const [loadingModel, setLoadingModel] = useState<boolean>(false);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [modelColor, setModelColor] = useState<string>("#00c8d4");
+  const [useOriginalMaterials, setUseOriginalMaterials] = useState<boolean>(true);
   const [wireframe, setWireframe] = useState<boolean>(false);
-  const [metalness, setMetalness] = useState<number>(0.1);
-  const [roughness, setRoughness] = useState<number>(0.6);
+  const [doubleSided, setDoubleSided] = useState<boolean>(true);
+  const [modelScale, setModelScale] = useState<number>(1.0);
   const [rotationSpeed, setRotationSpeed] = useState<number>(0);
   const [showControlsPanel, setShowControlsPanel] = useState<boolean>(true);
   const [lowSpecMode, setLowSpecMode] = useState<boolean>(false);
-  const [contextError, setContextError] = useState<string | null>(null);
+  const [modelStats, setModelStats] = useState<{ meshes: number; vertices: number; faces: number } | null>(null);
 
-  // Load available source models
+  // Fetch available source models list
   useEffect(() => {
     fetchSourceModels().then((models) => {
       setSourceModels(models);
@@ -39,7 +41,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     });
   }, []);
 
-  // Initialize WebGL Renderer & Scene with dark theme clear color
+  // Initialize Three.js Scene, Camera, Lights, Renderer
   useEffect(() => {
     if (!containerRef.current) return;
     const width = containerRef.current.clientWidth || 800;
@@ -51,11 +53,11 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     sceneRef.current = scene;
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
-    camera.position.set(30, 40, 50);
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 5000);
+    camera.position.set(40, 30, 50);
     cameraRef.current = camera;
 
-    // Renderer (strictly set clear color to dark background #0d0e11)
+    // Renderer
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: !lowSpecMode, alpha: false, powerPreference: "high-performance" });
@@ -67,7 +69,6 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     renderer.setSize(width, height);
     renderer.setPixelRatio(lowSpecMode ? 1.0 : Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = !lowSpecMode;
-    renderer.shadowMap.type = THREE.BasicShadowMap;
     rendererRef.current = renderer;
 
     const canvas = renderer.domElement;
@@ -77,47 +78,44 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     canvas.style.display = "block";
     containerRef.current.appendChild(canvas);
 
-    // WebGL Context Lost recovery
-    const handleContextLost = (event: Event) => {
-      event.preventDefault();
-      setContextError("WebGL context lost due to VRAM limits. Auto-switching to Low-Spec Mode.");
-      setLowSpecMode(true);
-    };
-    canvas.addEventListener("webglcontextlost", handleContextLost, false);
-
     // Orbit Controls
     const controls = new OrbitControls(camera, canvas);
-    controls.enableDamping = !lowSpecMode;
+    controls.enableDamping = true;
     controls.dampingFactor = 0.08;
+    controls.maxDistance = 2000;
+    controls.minDistance = 0.5;
     controlsRef.current = controls;
 
-    // Optimized Lighting Setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+    // Lights - Bright Multi-Directional Hemisphere Setup for Drone Models
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0x00c8d4, 2.0);
-    dirLight.position.set(40, 80, 40);
-    dirLight.castShadow = !lowSpecMode;
-    scene.add(dirLight);
+    const mainDirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    mainDirLight.position.set(100, 200, 100);
+    scene.add(mainDirLight);
 
-    const fillLight = new THREE.DirectionalLight(0x3d7fff, 1.0);
-    fillLight.position.set(-40, -20, -40);
-    scene.add(fillLight);
+    const fillDirLight = new THREE.DirectionalLight(0x00c8d4, 1.5);
+    fillDirLight.position.set(-100, 100, -100);
+    scene.add(fillDirLight);
+
+    const bottomLight = new THREE.DirectionalLight(0x3d7fff, 1.0);
+    bottomLight.position.set(0, -100, 0);
+    scene.add(bottomLight);
 
     // Grid Floor
-    const grid = new THREE.GridHelper(200, 40, 0x00c8d4, 0x1c1e24);
+    const grid = new THREE.GridHelper(300, 60, 0x00c8d4, 0x1c1e24);
     grid.position.y = -0.1;
     grid.name = "grid";
     grid.visible = activeToggles.has("grid");
     scene.add(grid);
 
     // Axes
-    const axes = new THREE.AxesHelper(30);
+    const axes = new THREE.AxesHelper(50);
     axes.name = "axes";
     axes.visible = activeToggles.has("axes");
     scene.add(axes);
 
-    // Render loop
+    // Animation Loop
     let reqId: number;
     const animate = () => {
       reqId = requestAnimationFrame(animate);
@@ -146,7 +144,6 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     return () => {
       cancelAnimationFrame(reqId);
       window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("webglcontextlost", handleContextLost);
       renderer.dispose();
       if (containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
@@ -163,45 +160,39 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     if (axes) axes.visible = activeToggles.has("axes");
   }, [activeToggles]);
 
-  // Fast Procedural Parametric Model Fallback Generator
-  const createProceduralModel = (colorHex: string) => {
-    const group = new THREE.Group();
-    
-    // Main building body
-    const mat = new THREE.MeshLambertMaterial({
-      color: new THREE.Color(colorHex),
-      wireframe: displayMode === "WIRE" || wireframe,
-    });
-    
-    const bodyGeo = new THREE.BoxGeometry(24, 48, 18);
-    const bodyMesh = new THREE.Mesh(bodyGeo, mat);
-    bodyMesh.position.y = 24;
-    group.add(bodyMesh);
+  // Auto-Frame Camera to Fit Model Bounding Box
+  const fitCameraToModel = (object: THREE.Object3D) => {
+    if (!cameraRef.current || !controlsRef.current) return;
 
-    // Podium base
-    const podGeo = new THREE.BoxGeometry(36, 10, 26);
-    const podMesh = new THREE.Mesh(podGeo, mat);
-    podMesh.position.y = 5;
-    group.add(podMesh);
+    const bbox = new THREE.Box3().setFromObject(object);
+    if (bbox.isEmpty()) return;
 
-    // Roof structure
-    const roofGeo = new THREE.BoxGeometry(14, 6, 10);
-    const roofMesh = new THREE.Mesh(roofGeo, mat);
-    roofMesh.position.y = 51;
-    group.add(roofMesh);
+    const center = bbox.getCenter(new THREE.Vector3());
+    const size = bbox.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z) || 10;
 
-    return group;
+    const fov = cameraRef.current.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+    cameraZ = Math.max(cameraZ, 20);
+
+    cameraRef.current.position.set(center.x + cameraZ * 0.7, center.y + cameraZ * 0.5, center.z + cameraZ * 0.8);
+    cameraRef.current.near = cameraZ / 100;
+    cameraRef.current.far = cameraZ * 100;
+    cameraRef.current.updateProjectionMatrix();
+
+    controlsRef.current.target.copy(center);
+    controlsRef.current.update();
   };
 
-  // Load GLB / 3D Model with ArrayBuffer Optimization & Graceful Fallback
+  // Load 3D GLB Model
   useEffect(() => {
     if (!sceneRef.current || !selectedModel) return;
 
     setLoadingModel(true);
     setLoadProgress(15);
-    setContextError(null);
+    originalMaterialsRef.current.clear();
 
-    // Clear existing model
+    // Remove existing model
     if (loadedModelRef.current) {
       sceneRef.current.remove(loadedModelRef.current);
       loadedModelRef.current = null;
@@ -209,10 +200,9 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
 
     const modelUrl = `http://localhost:8000/api/v1/source-models/${selectedModel}`;
 
-    // ArrayBuffer Fetch & Loader for High-Speed Memory-Optimized Load
     fetch(modelUrl)
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.arrayBuffer();
       })
       .then((buffer) => {
@@ -224,54 +214,59 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
           (gltf) => {
             const model = gltf.scene;
 
-            // Fit inside 40 unit bounding box
-            const bbox = new THREE.Box3().setFromObject(model);
-            const center = bbox.getCenter(new THREE.Vector3());
-            const size = bbox.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z) || 10;
+            let meshCount = 0;
+            let vertCount = 0;
+            let faceCount = 0;
 
-            model.position.sub(center);
-            model.position.y += size.y / 2;
-
-            const scale = 40 / maxDim;
-            model.scale.set(scale, scale, scale);
-
-            // Apply materials & geometry optimizations
             model.traverse((child) => {
               if ((child as THREE.Mesh).isMesh) {
                 const mesh = child as THREE.Mesh;
-                mesh.castShadow = !lowSpecMode;
-                mesh.receiveShadow = !lowSpecMode;
+                meshCount++;
 
-                if (displayMode === "WIRE" || wireframe) {
-                  mesh.material = new THREE.MeshBasicMaterial({
-                    color: new THREE.Color(modelColor),
-                    wireframe: true,
-                  });
-                } else if (lowSpecMode) {
-                  mesh.material = new THREE.MeshLambertMaterial({
-                    color: new THREE.Color(modelColor),
-                  });
-                } else {
-                  mesh.material = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(modelColor),
-                    metalness: metalness,
-                    roughness: roughness,
-                  });
+                if (mesh.geometry) {
+                  const pos = mesh.geometry.attributes.position;
+                  if (pos) vertCount += pos.count;
+                  if (mesh.geometry.index) {
+                    faceCount += mesh.geometry.index.count / 3;
+                  } else if (pos) {
+                    faceCount += pos.count / 3;
+                  }
+                }
+
+                // Cache original material
+                originalMaterialsRef.current.set(mesh, mesh.material);
+
+                // Enable double-sided rendering for complete visibility
+                if (Array.isArray(mesh.material)) {
+                  mesh.material.forEach((m) => (m.side = THREE.DoubleSide));
+                } else if (mesh.material) {
+                  mesh.material.side = THREE.DoubleSide;
                 }
               }
             });
 
+            setModelStats({
+              meshes: meshCount,
+              vertices: vertCount,
+              faces: Math.round(faceCount),
+            });
+
+            // Center model geometry on ground level
+            const bbox = new THREE.Box3().setFromObject(model);
+            const center = bbox.getCenter(new THREE.Vector3());
+            const size = bbox.getSize(new THREE.Vector3());
+
+            model.position.x = -center.x;
+            model.position.z = -center.z;
+            model.position.y = -bbox.min.y;
+
             loadedModelRef.current = model;
             sceneRef.current?.add(model);
+
+            fitCameraToModel(model);
+
             setLoadingModel(false);
             setLoadProgress(100);
-
-            if (controlsRef.current && cameraRef.current) {
-              controlsRef.current.target.set(0, 10, 0);
-              cameraRef.current.position.set(35, 30, 45);
-              controlsRef.current.update();
-            }
           },
           (err) => {
             throw err;
@@ -279,60 +274,99 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         );
       })
       .catch((err) => {
-        console.warn("Using optimized parametric 3D model geometry fallback:", err);
-        const fallbackGroup = createProceduralModel(modelColor);
-        loadedModelRef.current = fallbackGroup;
-        sceneRef.current?.add(fallbackGroup);
+        console.warn("Using procedural 3D model fallback:", err);
+
+        const group = new THREE.Group();
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(modelColor),
+          side: THREE.DoubleSide,
+          roughness: 0.4,
+          metalness: 0.2,
+        });
+
+        // Building tower geometry
+        const body = new THREE.Mesh(new THREE.BoxGeometry(24, 48, 18), mat);
+        body.position.y = 24;
+        group.add(body);
+
+        const pod = new THREE.Mesh(new THREE.BoxGeometry(38, 10, 28), mat);
+        pod.position.y = 5;
+        group.add(pod);
+
+        loadedModelRef.current = group;
+        sceneRef.current?.add(group);
+
+        setModelStats({ meshes: 2, vertices: 48, faces: 24 });
+        fitCameraToModel(group);
         setLoadingModel(false);
         setLoadProgress(100);
       });
-  }, [selectedModel, lowSpecMode]);
+  }, [selectedModel]);
 
-  // Update Customizer Material Parameters
+  // Update Scale
   useEffect(() => {
     if (!loadedModelRef.current) return;
+    loadedModelRef.current.scale.set(modelScale, modelScale, modelScale);
+  }, [modelScale]);
+
+  // Update Material Customization (Original vs Tint vs Wireframe)
+  useEffect(() => {
+    if (!loadedModelRef.current) return;
+
     loadedModelRef.current.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        if (mesh.material) {
-          const isWire = displayMode === "WIRE" || wireframe;
-          if (isWire) {
-            mesh.material = new THREE.MeshBasicMaterial({
-              color: new THREE.Color(modelColor),
-              wireframe: true,
-            });
-          } else if (lowSpecMode) {
-            mesh.material = new THREE.MeshLambertMaterial({
-              color: new THREE.Color(modelColor),
-            });
+        const orig = originalMaterialsRef.current.get(mesh);
+
+        if (displayMode === "WIRE" || wireframe) {
+          mesh.material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(modelColor),
+            wireframe: true,
+            side: THREE.DoubleSide,
+          });
+        } else if (displayMode === "CONFIDENCE") {
+          mesh.material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color("#22c55e"),
+            side: THREE.DoubleSide,
+            roughness: 0.3,
+          });
+        } else if (useOriginalMaterials && orig) {
+          mesh.material = orig;
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => (m.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide));
           } else {
-            mesh.material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(modelColor),
-              metalness: metalness,
-              roughness: roughness,
-            });
+            mesh.material.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
           }
+        } else {
+          mesh.material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(modelColor),
+            side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+            roughness: 0.4,
+            metalness: 0.2,
+          });
         }
       }
     });
-  }, [modelColor, metalness, roughness, wireframe, displayMode, lowSpecMode]);
+  }, [modelColor, useOriginalMaterials, wireframe, doubleSided, displayMode]);
 
   const setPresetView = (view: "TOP" | "FRONT" | "SIDE" | "RESET") => {
-    if (!cameraRef.current || !controlsRef.current) return;
-    if (view === "TOP") {
-      cameraRef.current.position.set(0, 80, 0.1);
-      controlsRef.current.target.set(0, 0, 0);
-    } else if (view === "FRONT") {
-      cameraRef.current.position.set(0, 15, 60);
-      controlsRef.current.target.set(0, 10, 0);
-    } else if (view === "SIDE") {
-      cameraRef.current.position.set(60, 15, 0);
-      controlsRef.current.target.set(0, 10, 0);
-    } else {
-      cameraRef.current.position.set(30, 40, 50);
-      controlsRef.current.target.set(0, 10, 0);
+    if (loadedModelRef.current) {
+      if (view === "RESET") {
+        fitCameraToModel(loadedModelRef.current);
+      } else if (cameraRef.current && controlsRef.current) {
+        const bbox = new THREE.Box3().setFromObject(loadedModelRef.current);
+        const center = bbox.getCenter(new THREE.Vector3());
+        const size = bbox.getSize(new THREE.Vector3());
+        const dist = Math.max(size.x, size.y, size.z) * 1.5 || 50;
+
+        if (view === "TOP") cameraRef.current.position.set(center.x, center.y + dist, center.z + 0.01);
+        if (view === "FRONT") cameraRef.current.position.set(center.x, center.y + dist * 0.2, center.z + dist);
+        if (view === "SIDE") cameraRef.current.position.set(center.x + dist, center.y + dist * 0.2, center.z);
+
+        controlsRef.current.target.copy(center);
+        controlsRef.current.update();
+      }
     }
-    controlsRef.current.update();
   };
 
   return (
@@ -344,21 +378,14 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
       {loadingModel && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0e11]/90 z-20">
           <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3" />
-          <span className="text-cyan-400 text-xs font-mono">OPTIMIZING & LOADING 3D MODEL ({loadProgress}%)...</span>
-          <span className="text-slate-500 text-[10px] font-mono mt-1">Source: {selectedModel} (60.36 MB ArrayBuffer)</span>
-        </div>
-      )}
-
-      {/* Warning Alert Banner for Context Loss / Low Spec Mode */}
-      {contextError && (
-        <div className="absolute top-14 left-3 z-30 px-3 py-1.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[10px] font-mono backdrop-blur">
-          ⚠️ {contextError}
+          <span className="text-cyan-400 text-xs font-mono font-semibold">LOADING 3D MODEL ({loadProgress}%)...</span>
+          <span className="text-slate-400 text-[10px] font-mono mt-1">{selectedModel} (60.36 MB ArrayBuffer)</span>
         </div>
       )}
 
       {/* Top Left Model Selector & Info Badge */}
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-        <div className="flex items-center gap-2 p-1.5 rounded bg-[#18191d]/90 border border-[#2a2b31] backdrop-blur">
+        <div className="flex items-center gap-2 p-1.5 rounded bg-[#18191d]/90 border border-[#2a2b31] backdrop-blur shadow-lg">
           <span className="text-[10px] font-mono text-slate-400">SOURCE MODEL:</span>
           <select
             value={selectedModel}
@@ -371,23 +398,30 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
               </option>
             ))}
           </select>
+
           <button
-            onClick={() => setLowSpecMode((l) => !l)}
-            className={`px-2 py-1 rounded text-[9px] font-mono border transition-colors ${
-              lowSpecMode ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"
-            }`}
-            title="Enable for smooth performance on low GPU devices"
+            onClick={() => loadedModelRef.current && fitCameraToModel(loadedModelRef.current)}
+            className="px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[9px] font-mono hover:bg-cyan-500/30 transition-colors cursor-pointer"
           >
-            {lowSpecMode ? "⚡ LOW-SPEC OPTIMIZED" : "⚡ HIGH-SPEC MODE"}
+            🎯 FIT TO SCREEN
           </button>
         </div>
+
+        {/* Model Statistics Badge */}
+        {modelStats && (
+          <div className="flex items-center gap-3 px-2.5 py-1 rounded bg-[#18191d]/90 border border-[#2a2b31] text-[9px] font-mono text-slate-400 backdrop-blur w-fit">
+            <span>MESHES: <strong className="text-cyan-400">{modelStats.meshes}</strong></span>
+            <span>VERTS: <strong className="text-emerald-400">{modelStats.vertices.toLocaleString()}</strong></span>
+            <span>FACES: <strong className="text-indigo-400">{modelStats.faces.toLocaleString()}</strong></span>
+          </div>
+        )}
       </div>
 
-      {/* Top Right Floating Customization Toolbar */}
+      {/* Top Right Customization Panel */}
       <div className="absolute top-3 right-3 z-10 flex flex-col gap-2 items-end">
         <button
           onClick={() => setShowControlsPanel((p) => !p)}
-          className="px-3 py-1.5 rounded bg-[#18191d]/90 text-cyan-400 border border-[#2a2b31] text-[10px] font-mono backdrop-blur transition-opacity hover:opacity-80 cursor-pointer"
+          className="px-3 py-1.5 rounded bg-[#18191d]/90 text-cyan-400 border border-[#2a2b31] text-[10px] font-mono backdrop-blur hover:bg-[#1f2025] transition-colors cursor-pointer shadow-lg"
         >
           {showControlsPanel ? "HIDE CUSTOMIZER" : "CUSTOMIZE 3D MODEL"}
         </button>
@@ -395,97 +429,79 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         {showControlsPanel && (
           <div className="w-64 p-3 rounded-lg bg-[#18191d]/95 border border-[#2a2b31] shadow-2xl flex flex-col gap-3 backdrop-blur text-xs font-mono">
             <div className="text-[10px] text-slate-400 border-b border-[#2a2b31] pb-1 font-semibold flex justify-between items-center">
-              <span>3D RENDER CUSTOMIZER</span>
-              <span className="text-[9px] text-emerald-400">{lowSpecMode ? "LOW-SPEC" : "PBR HIGH"}</span>
+              <span>3D MODEL CUSTOMIZER</span>
+              <span className="text-cyan-400 text-[9px]">REAL-TIME</span>
             </div>
 
-            {/* Custom Mesh Color */}
+            {/* Material Mode */}
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Mesh Tint Color</span>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="color"
-                  value={modelColor}
-                  onChange={(e) => setModelColor(e.target.value)}
-                  className="w-6 h-6 rounded bg-transparent cursor-pointer border border-[#2a2b31]"
-                />
-                <span className="text-cyan-400 text-[10px]">{modelColor}</span>
-              </div>
+              <span className="text-slate-400">Materials Mode</span>
+              <button
+                onClick={() => setUseOriginalMaterials((m) => !m)}
+                className={`px-2 py-0.5 rounded text-[9px] border ${
+                  useOriginalMaterials ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" : "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                }`}
+              >
+                {useOriginalMaterials ? "ORIGINAL TEXTURES" : "CUSTOM TINT"}
+              </button>
             </div>
 
-            {/* Preset Colors */}
-            <div className="flex gap-1.5 justify-end">
-              {["#00c8d4", "#3d7fff", "#22c55e", "#f59e0b", "#e2e4ea", "#e11d48"].map((hex) => (
-                <button
-                  key={hex}
-                  onClick={() => setModelColor(hex)}
-                  className="w-4 h-4 rounded-full border border-white/20 transition-transform hover:scale-110 cursor-pointer"
-                  style={{ background: hex }}
-                />
-              ))}
+            {/* Tint Color Picker (if custom tint mode) */}
+            {!useOriginalMaterials && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Custom Tint</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="color"
+                    value={modelColor}
+                    onChange={(e) => setModelColor(e.target.value)}
+                    className="w-5 h-5 rounded bg-transparent cursor-pointer border border-[#2a2b31]"
+                  />
+                  <span className="text-cyan-400 text-[10px]">{modelColor}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Double-Sided Rendering */}
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Double-Sided Faces</span>
+              <button
+                onClick={() => setDoubleSided((d) => !d)}
+                className={`px-2 py-0.5 rounded text-[9px] border ${doubleSided ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"}`}
+              >
+                {doubleSided ? "ENABLED" : "DISABLED"}
+              </button>
             </div>
 
             {/* Wireframe Toggle */}
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Wireframe Mesh</span>
+              <span className="text-slate-400">Wireframe View</span>
               <button
                 onClick={() => setWireframe((w) => !w)}
-                className={`px-2 py-0.5 rounded text-[10px] border ${wireframe ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"}`}
+                className={`px-2 py-0.5 rounded text-[9px] border ${wireframe ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"}`}
               >
                 {wireframe ? "ON" : "OFF"}
               </button>
             </div>
 
-            {/* Performance Mode Switch */}
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Low-GPU Optimization</span>
-              <button
-                onClick={() => setLowSpecMode((l) => !l)}
-                className={`px-2 py-0.5 rounded text-[10px] border ${lowSpecMode ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" : "bg-[#131418] text-slate-400 border-[#2a2b31]"}`}
-              >
-                {lowSpecMode ? "ENABLED" : "DISABLED"}
-              </button>
+            {/* Model Scale Slider */}
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[10px]">
+                <span className="text-slate-400">Model Scale</span>
+                <span className="text-cyan-400">{modelScale.toFixed(1)}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="3.0"
+                step="0.1"
+                value={modelScale}
+                onChange={(e) => setModelScale(parseFloat(e.target.value))}
+                className="w-full accent-cyan-400 cursor-pointer"
+              />
             </div>
 
-            {/* Metalness Slider */}
-            {!lowSpecMode && (
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-slate-400">Metalness</span>
-                  <span className="text-cyan-400">{metalness.toFixed(2)}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={metalness}
-                  onChange={(e) => setMetalness(parseFloat(e.target.value))}
-                  className="w-full accent-cyan-400 cursor-pointer"
-                />
-              </div>
-            )}
-
-            {/* Roughness Slider */}
-            {!lowSpecMode && (
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-slate-400">Roughness</span>
-                  <span className="text-cyan-400">{roughness.toFixed(2)}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={roughness}
-                  onChange={(e) => setRoughness(parseFloat(e.target.value))}
-                  className="w-full accent-cyan-400 cursor-pointer"
-                />
-              </div>
-            )}
-
-            {/* Auto Rotation Slider */}
+            {/* Auto Spin Speed */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between text-[10px]">
                 <span className="text-slate-400">Auto Spin Speed</span>
@@ -505,7 +521,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         )}
       </div>
 
-      {/* Bottom Left Camera Presets */}
+      {/* Bottom Left View Preset Controls */}
       <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 font-mono text-[9px]">
         {(["TOP", "FRONT", "SIDE", "RESET"] as const).map((view) => (
           <button
