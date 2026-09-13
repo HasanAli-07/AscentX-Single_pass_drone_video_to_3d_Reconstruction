@@ -1,3 +1,4 @@
 from .processor import MeshProcessorService
+from .exporter import ModelExportService
 
-__all__ = ["MeshProcessorService"]
+__all__ = ["MeshProcessorService", "ModelExportService"]

@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import cv2
-import sys, os
+import sys, os, tempfile
 
 sys.path.insert(0, os.path.abspath('backend'))
 sys.path.insert(0, os.path.abspath('.'))
@@ -12,6 +12,7 @@ from reconstruction.calibration.intrinsics import CameraCalibrationService
 from reconstruction.geospatial.crs import GeospatialTransformer
 from reconstruction.pointcloud.filter import PointCloudFilterService
 from reconstruction.depth.masking import DynamicObjectMasker
+from reconstruction.mesh.exporter import ModelExportService
 
 class TestAscentXBackend(unittest.TestCase):
     def test_project_service_list(self):
@@ -53,6 +54,13 @@ class TestAscentXBackend(unittest.TestCase):
         mask, objs = masker.detect_and_mask(dummy_img)
         self.assertEqual(mask.shape, (200, 200))
         self.assertGreater(len(objs), 0)
+
+    def test_model_export_service(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter = ModelExportService(tmp_dir)
+            zip_path = exporter.create_export_bundle("PRJ-2026-004A", ["OBJ", "PLY", "GEOJSON"])
+            self.assertTrue(os.path.exists(zip_path))
+            self.assertGreater(os.path.getsize(zip_path), 0)
 
 if __name__ == "__main__":
     unittest.main()
