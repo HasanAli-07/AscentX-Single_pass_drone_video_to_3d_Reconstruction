@@ -1,0 +1,10 @@
+{
+  "description": "Transform images and point clouds into clean, high-quality 3D models with advanced mesh analysis and cleanup tools, tailored for engineers and researchers.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
