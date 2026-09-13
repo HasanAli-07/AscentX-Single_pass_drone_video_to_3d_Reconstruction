@@ -10,6 +10,8 @@ from app.services.project_service import project_service
 from reconstruction.frame_selection.analyzer import FrameQualityAnalyzer
 from reconstruction.calibration.intrinsics import CameraCalibrationService
 from reconstruction.geospatial.crs import GeospatialTransformer
+from reconstruction.pointcloud.filter import PointCloudFilterService
+from reconstruction.depth.masking import DynamicObjectMasker
 
 class TestAscentXBackend(unittest.TestCase):
     def test_project_service_list(self):
@@ -35,6 +37,22 @@ class TestAscentXBackend(unittest.TestCase):
         ref = geo.get_reference_location()
         self.assertEqual(ref["latitude"], 47.3769)
         self.assertIn("utm_zone", ref)
+
+    def test_point_cloud_filter(self):
+        pts = np.random.rand(100, 3) * 10.0
+        pts[0] = [100.0, 100.0, 100.0]
+        filter_svc = PointCloudFilterService()
+        filtered, stats = filter_svc.process_point_cloud(pts)
+        self.assertLess(len(filtered), len(pts))
+        self.assertGreater(stats["outliers_removed"], 0)
+
+    def test_dynamic_object_masker(self):
+        masker = DynamicObjectMasker()
+        dummy_img = np.zeros((200, 200, 3), dtype=np.uint8)
+        cv2.rectangle(dummy_img, (50, 50), (100, 100), (255, 255, 255), -1)
+        mask, objs = masker.detect_and_mask(dummy_img)
+        self.assertEqual(mask.shape, (200, 200))
+        self.assertGreater(len(objs), 0)
 
 if __name__ == "__main__":
     unittest.main()
