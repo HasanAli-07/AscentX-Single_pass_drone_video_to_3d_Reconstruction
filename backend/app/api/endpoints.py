@@ -1,5 +1,6 @@
 import asyncio
 import os
+import glob
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -22,6 +23,32 @@ def health_check():
         "version": "1.0.0",
         "gpu_available": settings.ENABLE_GPU
     }
+
+@router.get("/source-models")
+def list_source_models():
+    source_dir = settings.BASE_DIR / "Projects" / "source"
+    if not source_dir.exists():
+        return []
+    models = []
+    for f in os.listdir(source_dir):
+        if f.endswith((".glb", ".gltf", ".obj", ".ply")):
+            file_path = source_dir / f
+            models.append({
+                "filename": f,
+                "name": f.replace("_", " ").replace("-", " ").rsplit(".", 1)[0].title(),
+                "size_mb": round(os.path.getsize(file_path) / (1024 * 1024), 2),
+                "download_url": f"/api/v1/source-models/{f}"
+            })
+    return models
+
+@router.get("/source-models/{filename}")
+def serve_source_model(filename: str):
+    source_dir = settings.BASE_DIR / "Projects" / "source"
+    file_path = source_dir / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Source model not found")
+    media_type = "model/gltf-binary" if filename.endswith(".glb") else "application/octet-stream"
+    return FileResponse(str(file_path), media_type=media_type)
 
 @router.get("/projects", response_model=List[ProjectSummary])
 def list_projects():
@@ -180,7 +207,6 @@ def serve_project_file(project_id: str, filename: str):
     proj_dir = settings.STORAGE_DIR / project_id
     file_path = proj_dir / filename
     if not file_path.exists():
-        # Generate baseline mesh file if model.obj requested
         if filename == "model.obj":
             from reconstruction.mesh.processor import MeshProcessorService
             MeshProcessorService(str(proj_dir)).generate_demo_mesh(str(file_path))

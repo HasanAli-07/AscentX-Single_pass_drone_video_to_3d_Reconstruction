@@ -3,7 +3,7 @@ import { Section, DisplayMode, ViewToggle, Project } from "./types";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { Console } from "./components/Console";
-import { MeshViewport } from "./viewer/MeshViewport";
+import { ThreeGLBViewer } from "./viewer/ThreeGLBViewer";
 import { SectionHeader, StatRow, Badge, Btn } from "./components/SharedPrimitives";
 import { fetchHealth, fetchProjects } from "./services/api";
 
@@ -15,7 +15,7 @@ import { GeorefWorkspace } from "./pages/GeorefWorkspace";
 import { ExportWorkspace } from "./pages/ExportWorkspace";
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState<Section>("project");
+  const [activeSection, setActiveSection] = useState<Section>("visualization");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("TEXTURED");
   const [activeToggles, setActiveToggles] = useState<Set<ViewToggle>>(
     new Set(["grid", "axes", "cameras", "flightpath", "bbox"])
@@ -62,7 +62,7 @@ export default function App() {
       case "measurements":
       case "reports":
       default:
-        return <MeshViewport displayMode={displayMode} activeToggles={activeToggles} />;
+        return <ThreeGLBViewer displayMode={displayMode} activeToggles={activeToggles} />;
     }
   };
 
@@ -98,7 +98,7 @@ export default function App() {
             </div>
             <StatRow label="Project ID" value={activeProject?.id || "PRJ-20241108-004A"} />
             <StatRow label="Single-Pass Flight" value="COMPLETED" accent />
-            <StatRow label="Sample Rate" value="15.8% (229 / 350)" />
+            <StatRow label="Source 3D Model" value="Untitled.glb (63.2 MB)" accent />
             <StatRow label="Camera Model" value="DJI FC3411 (24mm)" />
             <StatRow label="Sparse Points" value="184,392 pts" />
             <StatRow label="Dense Cloud" value="4.2M pts" accent />
@@ -107,6 +107,7 @@ export default function App() {
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
             <SectionHeader title="STAGE CONTROLS" />
             <div className="flex flex-col gap-2 mt-2">
+              <Btn label="CUSTOMIZE 3D MODEL" variant="secondary" onClick={() => setActiveSection("visualization")} />
               <Btn label="RE-RUN FRAME INTELLIGENCE" variant="secondary" onClick={() => setActiveSection("frames")} />
               <Btn label="START SfM & MVS" variant="primary" onClick={() => setActiveSection("reconstruction")} />
               <Btn label="APPLY GEOREFERENCING" variant="ghost" onClick={() => setActiveSection("georef")} />

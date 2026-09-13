@@ -2,6 +2,13 @@ import { Project, FrameMetric, ReconstructionJob, Measurement } from "../types";
 
 const API_BASE_URL = "http://localhost:8000/api/v1";
 
+export interface SourceModelInfo {
+  filename: string;
+  name: string;
+  size_mb: number;
+  download_url: string;
+}
+
 export async function fetchHealth(): Promise<{ status: string; gpu_available: boolean }> {
   try {
     const res = await fetch(`${API_BASE_URL}/health`);
@@ -10,6 +17,23 @@ export async function fetchHealth(): Promise<{ status: string; gpu_available: bo
     console.warn("Backend API offline, using standalone client mode.");
   }
   return { status: "standalone", gpu_available: false };
+}
+
+export async function fetchSourceModels(): Promise<SourceModelInfo[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/source-models`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Using fallback source models list");
+  }
+  return [
+    {
+      filename: "Untitled.glb",
+      name: "Source Project 3D Scan (Untitled.glb)",
+      size_mb: 63.29,
+      download_url: `${API_BASE_URL}/source-models/Untitled.glb`,
+    },
+  ];
 }
 
 export async function fetchProjects(): Promise<Project[]> {
