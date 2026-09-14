@@ -66,13 +66,17 @@ def get_project(project_id: str):
 
 @router.patch("/projects/{project_id}")
 def update_project(project_id: str, payload: dict):
-    proj = project_service.get_project(project_id)
+    proj = project_service.update_project(project_id, payload)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
-    for k, v in payload.items():
-        proj[k] = v
-    project_service._save_db()
     return proj
+
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: str):
+    success = project_service.delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "success", "deleted_project_id": project_id}
 
 @router.get("/projects/{project_id}/video")
 def serve_project_video(project_id: str):

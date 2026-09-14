@@ -14,6 +14,8 @@ import { ReconstructionWorkspace, ReconstructionState } from "./pages/Reconstruc
 import { GeorefWorkspace } from "./pages/GeorefWorkspace";
 import { ExportWorkspace } from "./pages/ExportWorkspace";
 
+import { ProjectFolderManager } from "./components/ProjectFolderManager";
+
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>("visualization");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("TEXTURED");
@@ -24,6 +26,7 @@ export default function App() {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [autoStartTrigger, setAutoStartTrigger] = useState<number>(0);
+  const [showFolderHub, setShowFolderHub] = useState<boolean>(false);
   const [reconstructionState, setReconstructionState] = useState<ReconstructionState>({
     isRunning: false,
     isPaused: false,
@@ -33,14 +36,20 @@ export default function App() {
     logs: [],
   });
 
+  const refreshProjectList = () => {
+    fetchProjects().then((list) => {
+      setProjects(list);
+      if (list.length > 0 && (!activeProject || !list.find((p) => p.id === activeProject.id))) {
+        setActiveProject(list[0]);
+      }
+    });
+  };
+
   useEffect(() => {
     fetchHealth().then((res) => {
       setApiConnected(res.status === "online");
     });
-    fetchProjects().then((list) => {
-      setProjects(list);
-      if (list.length > 0) setActiveProject(list[0]);
-    });
+    refreshProjectList();
   }, []);
 
   const toggleView = (toggle: ViewToggle) => {
@@ -127,6 +136,7 @@ export default function App() {
         toggleView={toggleView}
         onExport={() => setActiveSection("export")}
         onNewProject={handleCreateNewProject}
+        onOpenFolderHub={() => setShowFolderHub(true)}
       />
 
       {/* Main Workspace Area */}
@@ -196,6 +206,18 @@ export default function App() {
 
       {/* Bottom Processing Console */}
       <Console activeProject={activeProject} reconstructionState={reconstructionState} />
+
+      {/* Interactive Project Folder Storage Hub Modal */}
+      {showFolderHub && (
+        <ProjectFolderManager
+          projects={projects}
+          activeProject={activeProject}
+          onSelectProject={(p) => setActiveProject(p)}
+          onRefreshProjects={refreshProjectList}
+          onClose={() => setShowFolderHub(false)}
+          onNavigate={setActiveSection}
+        />
+      )}
     </div>
   );
 }

@@ -127,6 +127,18 @@ export async function createProject(name: string, description?: string): Promise
   };
 }
 
+export async function deleteProject(projectId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("Delete project failed:", e);
+  }
+  return false;
+}
+
 export async function uploadProjectFiles(
   projectId: string,
   videoFile?: File,

@@ -128,7 +128,41 @@ class ProjectService:
         }
         self._projects[proj_id] = proj
         self._save_db()
+        
+        # Save project_meta.json inside dedicated project folder
+        proj_dir = settings.STORAGE_DIR / proj_id
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        with open(proj_dir / "project_meta.json", "w") as f:
+            json.dump(proj, f, indent=2)
+            
         return proj
+
+    def update_project(self, project_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        proj = self.get_project(project_id)
+        if not proj:
+            return None
+        for k, v in updates.items():
+            proj[k] = v
+        self._save_db()
+        
+        proj_dir = settings.STORAGE_DIR / project_id
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        with open(proj_dir / "project_meta.json", "w") as f:
+            json.dump(proj, f, indent=2)
+            
+        return proj
+
+    def delete_project(self, project_id: str) -> bool:
+        if project_id in self._projects:
+            del self._projects[project_id]
+            self._save_db()
+            
+            proj_dir = settings.STORAGE_DIR / project_id
+            if proj_dir.exists():
+                import shutil
+                shutil.rmtree(proj_dir, ignore_errors=True)
+            return True
+        return False
 
     def run_frame_analysis(self, project_id: str) -> FrameAnalysisResult:
         proj = self.get_project(project_id)

@@ -11,6 +11,7 @@ interface HeaderProps {
   toggleView: (t: ViewToggle) => void;
   onExport: () => void;
   onNewProject: () => void;
+  onOpenFolderHub: () => void;
 }
 
 export function Header({
@@ -23,6 +24,7 @@ export function Header({
   toggleView,
   onExport,
   onNewProject,
+  onOpenFolderHub,
 }: HeaderProps) {
   const modes: DisplayMode[] = ["TEXTURED", "SOLID", "WIRE", "POINT CLOUD", "CONFIDENCE"];
   const toggles: { id: ViewToggle; label: string }[] = [
@@ -63,6 +65,12 @@ export function Header({
               </option>
             ))}
           </select>
+          <button
+            onClick={onOpenFolderHub}
+            className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30 text-[10px] font-bold cursor-pointer flex items-center gap-1 transition-colors"
+          >
+            <span>📂</span> FOLDERS
+          </button>
         </div>
 
         <Badge label={activeProject?.status || "SINGLE-PASS UAV"} variant="ok" />
