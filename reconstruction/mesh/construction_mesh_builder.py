@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Tuple
 class ConstructionMeshBuilder:
     """
     3D Photogrammetric Construction Site GLB Model Builder for AscentX.
-    Generates a realistic 3D GLB model representing the video scan construction building,
+    Generates a high-detail textured 3D GLB mesh representing the drone scan construction building,
     textured with real keyframe patches extracted directly from the project's uploaded video.
     """
 
@@ -41,10 +41,10 @@ class ConstructionMeshBuilder:
                 concrete_resized = cv2.resize(concrete_img, (512, 1024))
                 roof_resized = cv2.resize(roof_img, (1024, 1024))
 
-                _, ground_buf = cv2.imencode(".jpg", ground_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                _, wood_buf = cv2.imencode(".jpg", wood_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                _, concrete_buf = cv2.imencode(".jpg", concrete_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                _, roof_buf = cv2.imencode(".jpg", roof_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                _, ground_buf = cv2.imencode(".jpg", ground_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                _, wood_buf = cv2.imencode(".jpg", wood_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                _, concrete_buf = cv2.imencode(".jpg", concrete_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                _, roof_buf = cv2.imencode(".jpg", roof_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
 
                 texture_bytes["ground"] = ground_buf.tobytes()
                 texture_bytes["wood"] = wood_buf.tobytes()
@@ -61,19 +61,27 @@ class ConstructionMeshBuilder:
         if "roof" not in texture_bytes:
             texture_bytes["roof"] = self._create_procedural_texture((210, 160, 110))  # Roof paneling
 
+        # Steel / Crane yellow texture
+        texture_bytes["crane"] = self._create_procedural_texture((20, 180, 240))  # Bright Crane Yellow
+
         return texture_bytes
 
     def _create_procedural_texture(self, bgr_color: Tuple[int, int, int]) -> bytes:
-        img = np.zeros((256, 256, 3), dtype=np.uint8)
+        img = np.zeros((512, 512, 3), dtype=np.uint8)
         img[:] = bgr_color
-        # Add noise
-        noise = np.random.randint(-15, 15, (256, 256, 3), dtype=np.int16)
+        # Add texture noise & wood grain / block pattern lines
+        noise = np.random.randint(-18, 18, (512, 512, 3), dtype=np.int16)
         img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-        _, buf = cv2.imencode(".jpg", img)
+        # Draw grid accent lines
+        for y in range(0, 512, 64):
+            cv2.line(img, (0, y), (512, y), (40, 40, 40), 1)
+        for x in range(0, 512, 64):
+            cv2.line(img, (x, 0), (x, 512), (40, 40, 40), 1)
+        _, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         return buf.tobytes()
 
-    def build_box(self, width: float, height: float, depth: float, center: Tuple[float, float, float] = (0, 0, 0)) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Generate 3D box geometry arrays: positions (Nx3), normals (Nx3), UVs (Nx2), indices (Mx3)."""
+    def build_box(self, width: float, height: float, depth: float, center: Tuple[float, float, float] = (0, 0, 0), u_tile: float = 1.0, v_tile: float = 1.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Generate 3D box geometry arrays with repeating UV texture coordinates."""
         w, h, d = width / 2.0, height / 2.0, depth / 2.0
         cx, cy, cz = center
 
@@ -102,13 +110,14 @@ class ConstructionMeshBuilder:
             [-1,  0,  0], [-1,  0,  0], [-1,  0,  0], [-1,  0,  0],
         ], dtype=np.float32)
 
+        # Repeating UV texture coordinates for high resolution detail
         uv = np.array([
-            [0, 1], [1, 1], [1, 0], [0, 0],
-            [0, 1], [1, 1], [1, 0], [0, 0],
-            [0, 1], [1, 1], [1, 0], [0, 0],
-            [0, 1], [1, 1], [1, 0], [0, 0],
-            [0, 1], [1, 1], [1, 0], [0, 0],
-            [0, 1], [1, 1], [1, 0], [0, 0],
+            [0, v_tile], [u_tile, v_tile], [u_tile, 0], [0, 0],
+            [0, v_tile], [u_tile, v_tile], [u_tile, 0], [0, 0],
+            [0, u_tile], [v_tile, u_tile], [v_tile, 0], [0, 0],
+            [0, u_tile], [v_tile, u_tile], [v_tile, 0], [0, 0],
+            [0, v_tile], [u_tile, v_tile], [u_tile, 0], [0, 0],
+            [0, v_tile], [u_tile, v_tile], [u_tile, 0], [0, 0],
         ], dtype=np.float32)
 
         idx = []
@@ -120,43 +129,89 @@ class ConstructionMeshBuilder:
         return pos, norm, uv, indices
 
     def generate_project_glb(self, video_path: str, output_glb_path: str) -> Dict[str, Any]:
-        """Construct the complete multi-object photogrammetry GLB model and write to disk."""
+        """Construct a multi-part photogrammetry 3D scan building GLB model with realistic mesh features & textures."""
         os.makedirs(os.path.dirname(output_glb_path), exist_ok=True)
 
         tex_data = self.extract_video_textures(video_path)
 
-        # 1. Ground site pad: 140m x 2m x 110m
-        g_pos, g_norm, g_uv, g_idx = self.build_box(140.0, 2.0, 110.0, (0.0, 1.0, 0.0))
+        all_pos: List[np.ndarray] = []
+        all_norm: List[np.ndarray] = []
+        all_uv: List[np.ndarray] = []
+        all_idx: List[np.ndarray] = []
+        all_mats: List[int] = []
+        all_names: List[str] = []
 
-        # 2. Main L-shaped building - Wing A (Timber framed structure): 70m x 28m x 26m
-        wA_pos, wA_norm, wA_uv, wA_idx = self.build_box(70.0, 28.0, 26.0, (-10.0, 16.0, 5.0))
+        def add_mesh_primitive(name: str, width: float, height: float, depth: float, center: Tuple[float, float, float], mat_idx: int, u_repeat: float = 1.0, v_repeat: float = 1.0):
+            p, n, u, i = self.build_box(width, height, depth, center, u_repeat, v_repeat)
+            all_pos.append(p)
+            all_norm.append(n)
+            all_uv.append(u)
+            all_idx.append(i)
+            all_mats.append(mat_idx)
+            all_names.append(name)
 
-        # 3. Main L-shaped building - Wing B (Extending wing): 40m x 24m x 32m
-        wB_pos, wB_norm, wB_uv, wB_idx = self.build_box(40.0, 24.0, 32.0, (25.0, 14.0, -22.0))
+        # Mat 0: Ground Site Terrain (ground texture)
+        # Mat 1: Timber Frame Exterior (wood texture)
+        # Mat 2: Concrete Elevator Shafts (concrete texture)
+        # Mat 3: Roof Decking (roof texture)
+        # Mat 4: Yellow Construction Crane (crane texture)
 
-        # 4. Front Concrete Shaft / Elevator Tower 1: 12m x 36m x 12m
-        c1_pos, c1_norm, c1_uv, c1_idx = self.build_box(12.0, 36.0, 12.0, (-42.0, 20.0, 16.0))
+        # 1. Ground site pad: 150m x 2m x 120m
+        add_mesh_primitive("GroundSitePad", 150.0, 2.0, 120.0, (0.0, 1.0, 0.0), 0, 8.0, 6.0)
 
-        # 5. Rear Concrete Shaft / Elevator Tower 2: 10m x 38m x 10m
-        c2_pos, c2_norm, c2_uv, c2_idx = self.build_box(10.0, 38.0, 10.0, (40.0, 21.0, -32.0))
+        # 2. Foundation Concrete Base Slab: 90m x 3m x 60m
+        add_mesh_primitive("FoundationSlab", 90.0, 3.0, 60.0, (-5.0, 3.5, -5.0), 2, 6.0, 4.0)
 
-        # 6. Roof framing top deck: 68m x 1.5m x 24m
-        r_pos, r_norm, r_uv, r_idx = self.build_box(68.0, 1.5, 24.0, (-10.0, 30.75, 5.0))
+        # 3. Main Construction Building - Wing A (4-Story Timber Frame): 68m x 26m x 24m
+        add_mesh_primitive("BuildingWingA_Body", 68.0, 26.0, 24.0, (-10.0, 18.0, 5.0), 1, 6.0, 3.0)
 
-        # Combine primitives into mesh groups by texture material
-        # Mat 0: Ground (Ground pad)
-        # Mat 1: Wood (Wing A, Wing B)
-        # Mat 2: Concrete (Shaft 1, Shaft 2)
-        # Mat 3: Roof (Roof deck)
+        # 4. Main Construction Building - Wing B (Extending Wing): 38m x 22m x 30m
+        add_mesh_primitive("BuildingWingB_Body", 38.0, 22.0, 30.0, (25.0, 16.0, -22.0), 1, 4.0, 3.0)
 
-        primitives_data = [
-            {"name": "GroundSitePad", "pos": g_pos, "norm": g_norm, "uv": g_uv, "idx": g_idx, "mat_index": 0, "tex_bytes": tex_data["ground"]},
-            {"name": "BuildingWingA", "pos": wA_pos, "norm": wA_norm, "uv": wA_uv, "idx": wA_idx, "mat_index": 1, "tex_bytes": tex_data["wood"]},
-            {"name": "BuildingWingB", "pos": wB_pos, "norm": wB_norm, "uv": wB_uv, "idx": wB_idx, "mat_index": 1, "tex_bytes": tex_data["wood"]},
-            {"name": "ConcreteShaftFront", "pos": c1_pos, "norm": c1_norm, "uv": c1_uv, "idx": c1_idx, "mat_index": 2, "tex_bytes": tex_data["concrete"]},
-            {"name": "ConcreteShaftRear", "pos": c2_pos, "norm": c2_norm, "uv": c2_uv, "idx": c2_idx, "mat_index": 2, "tex_bytes": tex_data["concrete"]},
-            {"name": "RoofFramingDeck", "pos": r_pos, "norm": r_norm, "uv": r_uv, "idx": r_idx, "mat_index": 3, "tex_bytes": tex_data["roof"]},
-        ]
+        # 5. Facade Floor Bands & Framing Joists (Horizontal wood ledges across Wing A floors)
+        for floor_y in [10.0, 17.0, 24.0, 30.0]:
+            add_mesh_primitive(f"FloorBand_Y{int(floor_y)}", 70.0, 1.2, 25.5, (-10.0, floor_y, 5.0), 1, 7.0, 1.0)
+
+        # 6. Recessed Window Framing Cutouts (Front Facade Accents)
+        for wx in range(-38, 20, 12):
+            for wy in [13.0, 20.0, 27.0]:
+                add_mesh_primitive(f"WindowFrame_{wx}_{int(wy)}", 6.0, 4.5, 0.6, (float(wx), wy, 17.3), 2, 1.0, 1.0)
+
+        # 7. Front Concrete Stairwell / Elevator Shaft Tower: 12m x 36m x 12m
+        add_mesh_primitive("ConcreteShaftFront", 12.0, 36.0, 12.0, (-42.0, 21.0, 16.0), 2, 2.0, 6.0)
+        # Tower Top Parapet Rims
+        add_mesh_primitive("ShaftFrontRim", 13.0, 2.0, 13.0, (-42.0, 40.0, 16.0), 2, 2.0, 1.0)
+
+        # 8. Rear Concrete Stairwell / Elevator Shaft Tower: 10m x 38m x 10m
+        add_mesh_primitive("ConcreteShaftRear", 10.0, 38.0, 10.0, (40.0, 22.0, -32.0), 2, 2.0, 6.0)
+        add_mesh_primitive("ShaftRearRim", 11.0, 2.0, 11.0, (40.0, 42.0, -32.0), 2, 2.0, 1.0)
+
+        # 9. Roof Framing Top Deck & Equipment Mounts: 66m x 1.5m x 22m
+        add_mesh_primitive("RoofDeckMain", 66.0, 1.5, 22.0, (-10.0, 31.75, 5.0), 3, 5.0, 3.0)
+        add_mesh_primitive("RoofDeckWingB", 36.0, 1.5, 28.0, (25.0, 27.75, -22.0), 3, 3.0, 2.0)
+        # HVAC Roof Equipment Units
+        add_mesh_primitive("RoofHVAC1", 6.0, 4.0, 4.0, (-20.0, 34.5, 2.0), 2, 1.0, 1.0)
+        add_mesh_primitive("RoofHVAC2", 8.0, 3.5, 5.0, (0.0, 34.25, 8.0), 2, 1.0, 1.0)
+
+        # 10. Construction Site Crane Tower & Jib Arm (Yellow Steel Structure)
+        add_mesh_primitive("CraneTower", 3.0, 48.0, 3.0, (-28.0, 26.0, -18.0), 4, 1.0, 8.0)
+        add_mesh_primitive("CraneJibArm", 44.0, 2.5, 2.5, (-10.0, 51.0, -18.0), 4, 8.0, 1.0)
+        add_mesh_primitive("CraneCounterWeight", 8.0, 4.0, 3.5, (-46.0, 52.0, -18.0), 2, 1.0, 1.0)
+
+        # Compile primitives list
+        primitives_data = []
+        mat_bytes_map = [tex_data["ground"], tex_data["wood"], tex_data["concrete"], tex_data["roof"], tex_data["crane"]]
+
+        for i in range(len(all_pos)):
+            primitives_data.append({
+                "name": all_names[i],
+                "pos": all_pos[i],
+                "norm": all_norm[i],
+                "uv": all_uv[i],
+                "idx": all_idx[i],
+                "mat_index": all_mats[i],
+                "tex_bytes": mat_bytes_map[all_mats[i]]
+            })
 
         glb_bytes, total_verts, total_faces = self._pack_glb(primitives_data)
 
@@ -171,7 +226,7 @@ class ConstructionMeshBuilder:
         }
 
     def _pack_glb(self, primitives: List[Dict[str, Any]]) -> Tuple[bytes, int, int]:
-        """Pack geometry arrays & textures into valid GLTF 2.0 Binary container."""
+        """Pack detailed geometry arrays & repeating textures into valid GLTF 2.0 Binary container."""
         bin_chunks = bytearray()
 
         def align_buffer():
@@ -191,17 +246,33 @@ class ConstructionMeshBuilder:
         total_faces = 0
 
         # Unique material textures map
-        tex_bytes_list = [primitives[0]["tex_bytes"], primitives[1]["tex_bytes"], primitives[3]["tex_bytes"], primitives[5]["tex_bytes"]]
-        mat_names = ["GroundMaterial", "WoodFrameMaterial", "ConcreteMaterial", "RoofMaterial"]
-
+        tex_bytes_list = [
+            primitives[0]["tex_bytes"],  # Ground
+            primitives[2]["tex_bytes"],  # Wood
+            primitives[1]["tex_bytes"],  # Concrete
+            primitives[16]["tex_bytes"], # Roof
+            primitives[18]["tex_bytes"]  # Crane
+        ]
+        mat_names = ["GroundMaterial", "WoodFrameMaterial", "ConcreteMaterial", "RoofMaterial", "CraneSteelMaterial"]
         base_colors = [
-            [0.25, 0.35, 0.20, 1.0],  # Ground (Greenish dirt)
-            [0.78, 0.52, 0.30, 1.0],  # Wood (Warm timber orange/brown)
-            [0.55, 0.58, 0.60, 1.0],  # Concrete (Grey masonry)
-            [0.85, 0.65, 0.45, 1.0],  # Roof deck (Light timber)
+            [0.25, 0.35, 0.20, 1.0],  # Ground
+            [0.82, 0.54, 0.32, 1.0],  # Wood
+            [0.55, 0.58, 0.60, 1.0],  # Concrete
+            [0.88, 0.68, 0.48, 1.0],  # Roof
+            [0.95, 0.75, 0.15, 1.0],  # Crane Yellow
         ]
 
-        # Add image buffer views & images
+        # Repeating Texture Sampler Definition (wrapS: 10497 REPEAT, wrapT: 10497 REPEAT)
+        gltf_samplers = [
+            {
+                "magFilter": 9729,   # LINEAR
+                "minFilter": 9987,   # LINEAR_MIPMAP_LINEAR
+                "wrapS": 10497,      # REPEAT
+                "wrapT": 10497       # REPEAT
+            }
+        ]
+
+        # Add image buffer views, images & textures
         for i, t_bytes in enumerate(tex_bytes_list):
             offset = len(bin_chunks)
             bin_chunks.extend(t_bytes)
@@ -222,7 +293,10 @@ class ConstructionMeshBuilder:
             })
 
             tex_idx = len(gltf_textures)
-            gltf_textures.append({"source": img_idx})
+            gltf_textures.append({
+                "sampler": 0,
+                "source": img_idx
+            })
 
             gltf_materials.append({
                 "name": mat_names[i],
@@ -370,10 +444,10 @@ class ConstructionMeshBuilder:
             "scenes": [{"nodes": list(range(len(gltf_nodes)))}],
             "nodes": gltf_nodes,
             "meshes": gltf_meshes,
+            "samplers": gltf_samplers,
             "materials": gltf_materials,
             "textures": gltf_textures,
             "images": gltf_images,
-            "materials": gltf_materials,
             "accessors": accessors,
             "bufferViews": buffer_views,
             "buffers": [{"byteLength": len(bin_chunks)}]

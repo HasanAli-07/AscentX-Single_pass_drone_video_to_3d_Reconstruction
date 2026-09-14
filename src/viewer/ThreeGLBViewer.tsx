@@ -30,13 +30,13 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
   const [loadingModel, setLoadingModel] = useState<boolean>(false);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [modelColor, setModelColor] = useState<string>("#00c8d4");
-  const [useOriginalMaterials, setUseOriginalMaterials] = useState<boolean>(false);
+  const [useOriginalMaterials, setUseOriginalMaterials] = useState<boolean>(true);
   const [wireframe, setWireframe] = useState<boolean>(false);
   const [doubleSided, setDoubleSided] = useState<boolean>(true);
   const [modelScale, setModelScale] = useState<number>(1.0);
   const [rotationSpeed, setRotationSpeed] = useState<number>(0);
   const [showControlsPanel, setShowControlsPanel] = useState<boolean>(true);
-  const [qualityPreset, setQualityPreset] = useState<QualityPreset>("LOW");
+  const [qualityPreset, setQualityPreset] = useState<QualityPreset>("BALANCED");
   const [currentFps, setCurrentFps] = useState<number>(60);
   const [webglContextLost, setWebglContextLost] = useState<boolean>(false);
   const [modelStats, setModelStats] = useState<{ meshes: number; vertices: number; faces: number } | null>(null);
@@ -105,8 +105,8 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
           const maps = [mat.map, mat.normalMap, mat.roughnessMap, mat.metalnessMap, mat.aoMap, mat.emissiveMap];
           maps.forEach((map) => {
             if (map) {
-              map.generateMipmaps = !isUltraLow;
-              map.minFilter = isUltraLow ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter;
+              map.generateMipmaps = true;
+              map.minFilter = THREE.LinearMipmapLinearFilter;
               map.magFilter = THREE.LinearFilter;
               map.anisotropy = isUltraLow ? 1 : 2;
               map.needsUpdate = true;
@@ -527,18 +527,16 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             side: THREE.DoubleSide,
           });
         } else if (useOriginalMaterials && orig) {
-          mesh.material = orig;
-          if (Array.isArray(mesh.material)) {
-            mesh.material.forEach((m: any) => {
-              m.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
-              m.wireframe = wireframe;
-              m.needsUpdate = true;
-            });
+          if (Array.isArray(orig)) {
+            mesh.material = orig;
           } else {
-            const m: any = mesh.material;
-            m.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
-            m.wireframe = wireframe;
-            m.needsUpdate = true;
+            const m = orig as any;
+            mesh.material = new THREE.MeshBasicMaterial({
+              map: m.map || null,
+              color: m.color || new THREE.Color(0xffffff),
+              side: THREE.DoubleSide,
+              wireframe: wireframe,
+            });
           }
         } else if (isUltraLow) {
           mesh.material = new THREE.MeshBasicMaterial({
