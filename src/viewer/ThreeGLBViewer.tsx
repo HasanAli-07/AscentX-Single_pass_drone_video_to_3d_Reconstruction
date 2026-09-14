@@ -408,8 +408,9 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             }
 
             const texturedMat = new THREE.MeshStandardMaterial({
-              map: texMap,
-              color: new THREE.Color(0xffffff),
+              map: texMap || null,
+              color: texMap ? new THREE.Color(0xffffff) : new THREE.Color(modelColor),
+              emissive: new THREE.Color(0x333333), // Ambient self-illumination fill
               roughness: 0.5,
               metalness: 0.1,
               side: THREE.DoubleSide,
@@ -543,6 +544,13 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
           mesh.material = new THREE.MeshBasicMaterial({
             color: new THREE.Color("#22c55e"),
             side: THREE.DoubleSide,
+          });
+        } else if (displayMode === "SOLID") {
+          mesh.material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(modelColor),
+            side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+            roughness: 0.4,
+            metalness: 0.2,
           });
         } else if (useOriginalMaterials && orig) {
           mesh.material = orig;
