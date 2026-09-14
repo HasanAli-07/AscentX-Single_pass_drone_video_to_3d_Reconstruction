@@ -527,28 +527,19 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             side: THREE.DoubleSide,
           });
         } else if (useOriginalMaterials && orig) {
-          if (Array.isArray(orig)) {
-            mesh.material = orig;
-          } else {
-            const m = orig as any;
-            if (isUltraLow) {
-              mesh.material = new THREE.MeshBasicMaterial({
-                map: m.map || null,
-                color: m.color || new THREE.Color(0xffffff),
-                side: THREE.DoubleSide,
-                wireframe: wireframe,
-              });
-            } else {
-              mesh.material = new THREE.MeshStandardMaterial({
-                map: m.map || null,
-                color: m.color || new THREE.Color(0xffffff),
-                roughness: 0.6,
-                metalness: 0.1,
-                side: THREE.DoubleSide,
-                wireframe: wireframe,
-              });
+          mesh.material = orig;
+          const materials = Array.isArray(orig) ? orig : [orig];
+          materials.forEach((mat: any) => {
+            if (mat) {
+              mat.wireframe = wireframe;
+              mat.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+              if (mat.map) {
+                mat.map.generateMipmaps = true;
+                mat.map.needsUpdate = true;
+              }
+              mat.needsUpdate = true;
             }
-          }
+          });
         } else if (isUltraLow) {
           mesh.material = new THREE.MeshBasicMaterial({
             color: new THREE.Color(modelColor),
