@@ -394,22 +394,29 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
               }
             }
 
-            originalMaterialsRef.current.set(mesh, mesh.material);
+            const gltfMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+            const texMap = (gltfMat as any)?.map || null;
 
-            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            mats.forEach((m: any) => {
-              if (m) {
-                m.side = THREE.DoubleSide;
-                if (m.color) m.color.setHex(0xffffff);
-                if (m.map) {
-                  m.map.generateMipmaps = true;
-                  m.map.minFilter = THREE.LinearMipmapLinearFilter;
-                  m.map.magFilter = THREE.LinearFilter;
-                  m.map.needsUpdate = true;
-                }
-                m.needsUpdate = true;
-              }
+            if (texMap) {
+              texMap.colorSpace = THREE.SRGBColorSpace;
+              texMap.wrapS = THREE.RepeatWrapping;
+              texMap.wrapT = THREE.RepeatWrapping;
+              texMap.generateMipmaps = true;
+              texMap.minFilter = THREE.LinearMipmapLinearFilter;
+              texMap.magFilter = THREE.LinearFilter;
+              texMap.needsUpdate = true;
+            }
+
+            const texturedMat = new THREE.MeshStandardMaterial({
+              map: texMap,
+              color: new THREE.Color(0xffffff),
+              roughness: 0.5,
+              metalness: 0.1,
+              side: THREE.DoubleSide,
             });
+
+            mesh.material = texturedMat;
+            originalMaterialsRef.current.set(mesh, texturedMat);
           }
         });
 
@@ -544,10 +551,6 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             if (mat) {
               mat.wireframe = wireframe;
               mat.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
-              if (mat.map) {
-                mat.map.generateMipmaps = true;
-                mat.map.needsUpdate = true;
-              }
               mat.needsUpdate = true;
             }
           });
