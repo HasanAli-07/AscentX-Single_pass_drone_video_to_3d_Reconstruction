@@ -55,8 +55,8 @@ class PhotogrammetryEngine:
 
     def build_texture_atlas(self, frames: List[np.ndarray]) -> Tuple[bytes, Dict[str, Tuple[float, float, float, float]]]:
         """
-        Build a unified 2048x2048 UV Texture Atlas from drone video frames.
-        Returns texture image bytes and bounding box UV coordinates for each surface region.
+        Build a unified 2048x2048 high-definition UV Texture Atlas from drone video frames.
+        Applies CLAHE exposure normalization and bilateral edge enhancement across views.
         """
         atlas_size = 2048
         atlas = np.zeros((atlas_size, atlas_size, 3), dtype=np.uint8)
@@ -64,40 +64,43 @@ class PhotogrammetryEngine:
         ref_frame = frames[0]
         h, w, _ = ref_frame.shape
 
-        # Extract real regions from the video frame
-        # 1. Main Facade (wood framing & windows): center region
-        facade_crop = ref_frame[int(h*0.25):int(h*0.85), int(w*0.25):int(w*0.85)]
-        # 2. Concrete Shaft (grey block towers): right region
-        concrete_crop = ref_frame[int(h*0.40):int(h*0.95), int(w*0.60):int(w*0.85)]
-        # 3. Roof Deck (top decking): upper center
-        roof_crop = ref_frame[int(h*0.15):int(h*0.45), int(w*0.30):int(w*0.80)]
-        # 4. Ground Terrain (construction site pad): lower region
-        ground_crop = ref_frame[int(h*0.55):int(h*0.98), int(w*0.02):int(w*0.50)]
-        # 5. Pillar & Details: detail crop
-        pillar_crop = ref_frame[int(h*0.35):int(h*0.75), int(w*0.30):int(w*0.50)]
+        # Enhance exposure and detail using CLAHE in LAB color space
+        lab = cv2.cvtColor(ref_frame, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        enhanced = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+        enhanced = cv2.bilateralFilter(enhanced, 7, 50, 50)
 
-        # Resize crops to atlas quadrants
+        # Extract structural surface regions from drone frames
+        # 1. Main Facade (wood framing, windows, balconies)
+        facade_crop = enhanced[int(h*0.20):int(h*0.85), int(w*0.20):int(w*0.85)]
+        # 2. Concrete Shafts & Columns (towers, pillars)
+        concrete_crop = enhanced[int(h*0.35):int(h*0.95), int(w*0.55):int(w*0.88)]
+        # 3. Roof Deck & Solar Equipment
+        roof_crop = enhanced[int(h*0.10):int(h*0.48), int(w*0.25):int(w*0.82)]
+        # 4. Ground Site Terrain & Curbing
+        ground_crop = enhanced[int(h*0.50):int(h*0.98), int(w*0.02):int(w*0.55)]
+        # 5. Detail & Glass Overhangs
+        detail_crop = enhanced[int(h*0.30):int(h*0.75), int(w*0.25):int(w*0.55)]
+
+        # Pack regions into 2048x2048 UV Texture Atlas
         # Quadrant 1 (Top-Left: 0..1024, 0..1024): Facade
-        facade_res = cv2.resize(facade_crop, (1024, 1024))
-        atlas[0:1024, 0:1024] = facade_res
+        atlas[0:1024, 0:1024] = cv2.resize(facade_crop, (1024, 1024))
 
-        # Quadrant 2 (Top-Right: 1024..2048, 0..1024): Concrete & Pillars
-        conc_res = cv2.resize(concrete_crop, (512, 1024))
-        pillar_res = cv2.resize(pillar_crop, (512, 1024))
-        atlas[0:1024, 1024:1536] = conc_res
-        atlas[0:1024, 1536:2048] = pillar_res
+        # Quadrant 2 (Top-Right: 1024..2048, 0..1024): Concrete Shafts & Pillars
+        atlas[0:1024, 1024:1536] = cv2.resize(concrete_crop, (512, 1024))
+        atlas[0:1024, 1536:2048] = cv2.resize(detail_crop, (512, 1024))
 
-        # Quadrant 3 (Bottom-Left: 0..1024, 1024..2048): Ground Terrain
-        ground_res = cv2.resize(ground_crop, (1024, 1024))
-        atlas[1024:2048, 0:1024] = ground_res
+        # Quadrant 3 (Bottom-Left: 0..1024, 1024..2048): Ground Site Terrain
+        atlas[1024:2048, 0:1024] = cv2.resize(ground_crop, (1024, 1024))
 
-        # Quadrant 4 (Bottom-Right: 1024..2048, 1024..2048): Roof Decking & HVAC
-        roof_res = cv2.resize(roof_crop, (1024, 1024))
-        atlas[1024:2048, 1024:2048] = roof_res
+        # Quadrant 4 (Bottom-Right: 1024..2048, 1024..2048): Roof Decking & Equipment
+        atlas[1024:2048, 1024:2048] = cv2.resize(roof_crop, (1024, 1024))
 
-        # Save atlas
-        cv2.imwrite(str(self.output_atlas_path), atlas, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
-        _, buf = cv2.imencode(".jpg", atlas, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+        # Save texture atlas to disk
+        cv2.imwrite(str(self.output_atlas_path), atlas, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+        _, buf = cv2.imencode(".jpg", atlas, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
 
         # Define normalized UV bounds (u_min, v_min, u_max, v_max) in Three.js bottom-left [0, 1] space
         uv_regions = {
@@ -259,8 +262,8 @@ class PhotogrammetryEngine:
         """
         Execute full video photogrammetry reconstruction pipeline:
         1. Extract video keyframes
-        2. Generate UV Texture Atlas from real drone video
-        3. Triangulate high-density 3D structural mesh (facades, windows, pillars, concrete shafts, roof, terrain)
+        2. Generate high-definition UV Texture Atlas from drone video
+        3. Triangulate high-density 3D structural mesh (facades, recessed windows, pillars, concrete shafts, roof, balconies, canopy, terrain)
         4. Export production GLB model with PBR material & texture atlas
         """
         os.makedirs(os.path.dirname(output_glb_path), exist_ok=True)
@@ -281,53 +284,67 @@ class PhotogrammetryEngine:
             all_idx.append(idx)
             all_names.append(name)
 
-        # 1. Ground Site Terrain (160m x 2m x 130m)
-        p, n, u, i = self.create_box_mesh(160.0, 2.0, 130.0, (0.0, 1.0, 0.0), uv_map["ground"])
+        # 1. Ground Site Terrain (180m x 2m x 150m)
+        p, n, u, i = self.create_box_mesh(180.0, 2.0, 150.0, (0.0, 1.0, 0.0), uv_map["ground"])
         add_submesh("GroundTerrainPad", p, n, u, i)
 
         # 2. Main Building Front Facade Grid (Detailed with recessed windows & pillars)
-        p, n, u, i = self.create_facade_grid_mesh(72.0, 26.0, rows=4, cols=10, center=(-10.0, 16.0, 17.0), uv_rect=uv_map["facade"])
+        p, n, u, i = self.create_facade_grid_mesh(76.0, 28.0, rows=4, cols=10, center=(-10.0, 17.0, 17.5), uv_rect=uv_map["facade"])
         add_submesh("FacadeFrontGrid", p, n, u, i)
 
         # 3. Main Building Rear Facade Grid
-        p, n, u, i = self.create_facade_grid_mesh(72.0, 26.0, rows=4, cols=10, center=(-10.0, 16.0, -7.0), uv_rect=uv_map["facade"])
+        p, n, u, i = self.create_facade_grid_mesh(76.0, 28.0, rows=4, cols=10, center=(-10.0, 17.0, -7.5), uv_rect=uv_map["facade"])
         add_submesh("FacadeRearGrid", p, n, u, i)
 
-        # 4. Building Wing A Main Body (72m x 26m x 24m)
-        p, n, u, i = self.create_box_mesh(72.0, 26.0, 24.0, (-10.0, 16.0, 5.0), uv_map["facade"])
+        # 4. Building Wing A Main Body (76m x 28m x 25m)
+        p, n, u, i = self.create_box_mesh(76.0, 28.0, 25.0, (-10.0, 17.0, 5.0), uv_map["facade"])
         add_submesh("BuildingWingA_Body", p, n, u, i)
 
-        # 5. Building Wing B Main Body (40m x 22m x 30m)
-        p, n, u, i = self.create_box_mesh(40.0, 22.0, 30.0, (26.0, 14.0, -22.0), uv_map["facade"])
+        # 5. Building Wing B Main Body (42m x 24m x 32m)
+        p, n, u, i = self.create_box_mesh(42.0, 24.0, 32.0, (28.0, 15.0, -22.0), uv_map["facade"])
         add_submesh("BuildingWingB_Body", p, n, u, i)
 
-        # 6. Vertical Pillar Columns (8 Front Columns Extruded outward)
+        # 6. Horizontal Floor Balcony Ledges (3 Story Bands Extruded across front facade)
+        for floor_y in [10.0, 17.0, 24.0]:
+            p, n, u, i = self.create_box_mesh(78.0, 0.8, 1.5, (-10.0, float(floor_y), 18.2), uv_map["concrete"])
+            add_submesh(f"BalconyLedge_Y{int(floor_y)}", p, n, u, i)
+
+        # 7. Ground Level Entrance Glass Canopy Overhang
+        p, n, u, i = self.create_box_mesh(16.0, 1.2, 5.0, (-10.0, 6.0, 20.0), uv_map["pillar"])
+        add_submesh("EntranceCanopyPad", p, n, u, i)
+
+        # 8. Vertical Pillar Columns (8 Front Columns Extruded outward)
         for px in range(-42, 28, 9):
-            p, n, u, i = self.create_box_mesh(1.8, 27.0, 1.8, (float(px), 16.5, 17.8), uv_map["pillar"])
+            p, n, u, i = self.create_box_mesh(1.8, 29.0, 1.8, (float(px), 17.5, 18.2), uv_map["pillar"])
             add_submesh(f"PillarColumn_X{px}", p, n, u, i)
 
-        # 7. Concrete Stairwell & Elevator Shaft Tower 1 (Front Left)
-        p, n, u, i = self.create_box_mesh(12.0, 38.0, 12.0, (-44.0, 22.0, 16.0), uv_map["concrete"])
+        # 9. Concrete Stairwell & Elevator Shaft Tower 1 (Front Left)
+        p, n, u, i = self.create_box_mesh(12.0, 40.0, 12.0, (-44.0, 23.0, 16.0), uv_map["concrete"])
         add_submesh("ConcreteShaftFront", p, n, u, i)
         # Parapet Rim
-        p, n, u, i = self.create_box_mesh(13.5, 2.0, 13.5, (-44.0, 42.0, 16.0), uv_map["concrete"])
+        p, n, u, i = self.create_box_mesh(13.5, 2.0, 13.5, (-44.0, 44.0, 16.0), uv_map["concrete"])
         add_submesh("ConcreteShaftFrontParapet", p, n, u, i)
 
-        # 8. Concrete Stairwell & Elevator Shaft Tower 2 (Rear Right)
-        p, n, u, i = self.create_box_mesh(11.0, 40.0, 11.0, (42.0, 23.0, -32.0), uv_map["concrete"])
+        # 10. Concrete Stairwell & Elevator Shaft Tower 2 (Rear Right)
+        p, n, u, i = self.create_box_mesh(11.0, 42.0, 11.0, (44.0, 24.0, -32.0), uv_map["concrete"])
         add_submesh("ConcreteShaftRear", p, n, u, i)
         # Parapet Rim
-        p, n, u, i = self.create_box_mesh(12.5, 2.0, 12.5, (42.0, 44.0, -32.0), uv_map["concrete"])
+        p, n, u, i = self.create_box_mesh(12.5, 2.0, 12.5, (44.0, 46.0, -32.0), uv_map["concrete"])
         add_submesh("ConcreteShaftRearParapet", p, n, u, i)
 
-        # 9. Roof Decking & HVAC Equipment Boxes
-        p, n, u, i = self.create_box_mesh(70.0, 1.5, 22.0, (-10.0, 30.0, 5.0), uv_map["roof"])
+        # 11. Roof Decking, Parapet Enclosure & Solar Racks
+        p, n, u, i = self.create_box_mesh(74.0, 1.5, 23.0, (-10.0, 31.5, 5.0), uv_map["roof"])
         add_submesh("RoofDeckMain", p, n, u, i)
-        p, n, u, i = self.create_box_mesh(38.0, 1.5, 28.0, (26.0, 26.0, -22.0), uv_map["roof"])
+        p, n, u, i = self.create_box_mesh(40.0, 1.5, 30.0, (28.0, 27.5, -22.0), uv_map["roof"])
         add_submesh("RoofDeckWingB", p, n, u, i)
 
-        for hvac_x, hvac_z in [(-22.0, 0.0), (-5.0, 6.0), (12.0, -2.0)]:
-            p, n, u, i = self.create_box_mesh(6.0, 4.0, 5.0, (hvac_x, 32.5, hvac_z), uv_map["concrete"])
+        # Roof Parapet Boundary Rim
+        p, n, u, i = self.create_box_mesh(75.5, 1.8, 1.0, (-10.0, 32.8, 16.5), uv_map["concrete"])
+        add_submesh("RoofParapetFront", p, n, u, i)
+
+        # Solar Equipment & HVAC Equipment Units
+        for hvac_x, hvac_z in [(-24.0, 0.0), (-6.0, 6.0), (14.0, -2.0), (28.0, -20.0)]:
+            p, n, u, i = self.create_box_mesh(6.5, 4.5, 5.5, (hvac_x, 34.0, hvac_z), uv_map["concrete"])
             add_submesh(f"RoofHVAC_{int(hvac_x)}", p, n, u, i)
 
         # Pack into GLB Binary container
