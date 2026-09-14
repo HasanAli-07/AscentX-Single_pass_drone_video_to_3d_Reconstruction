@@ -390,15 +390,20 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
             originalMaterialsRef.current.set(mesh, mesh.material);
 
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((m) => {
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach((m: any) => {
+              if (m) {
                 m.side = THREE.DoubleSide;
+                if (m.color) m.color.setHex(0xffffff);
+                if (m.map) {
+                  m.map.generateMipmaps = true;
+                  m.map.minFilter = THREE.LinearMipmapLinearFilter;
+                  m.map.magFilter = THREE.LinearFilter;
+                  m.map.needsUpdate = true;
+                }
                 m.needsUpdate = true;
-              });
-            } else if (mesh.material) {
-              mesh.material.side = THREE.DoubleSide;
-              mesh.material.needsUpdate = true;
-            }
+              }
+            });
           }
         });
 

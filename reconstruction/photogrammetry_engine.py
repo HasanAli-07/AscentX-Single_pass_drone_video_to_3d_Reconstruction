@@ -99,13 +99,13 @@ class PhotogrammetryEngine:
         cv2.imwrite(str(self.output_atlas_path), atlas, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         _, buf = cv2.imencode(".jpg", atlas, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
 
-        # Define normalized UV bounds (u_min, v_min, u_max, v_max) in [0, 1]
+        # Define normalized UV bounds (u_min, v_min, u_max, v_max) in Three.js bottom-left [0, 1] space
         uv_regions = {
-            "facade": (0.0, 0.0, 0.5, 0.5),
-            "concrete": (0.5, 0.0, 0.75, 0.5),
-            "pillar": (0.75, 0.0, 1.0, 0.5),
-            "ground": (0.0, 0.5, 0.5, 1.0),
-            "roof": (0.5, 0.5, 1.0, 1.0)
+            "facade": (0.0, 0.5, 0.5, 1.0),     # Top-Left quadrant
+            "concrete": (0.5, 0.5, 0.75, 1.0),  # Top-Right left half
+            "pillar": (0.75, 0.5, 1.0, 1.0),    # Top-Right right half
+            "ground": (0.0, 0.0, 0.5, 0.5),     # Bottom-Left quadrant
+            "roof": (0.5, 0.0, 1.0, 0.5)        # Bottom-Right quadrant
         }
 
         return buf.tobytes(), uv_regions
