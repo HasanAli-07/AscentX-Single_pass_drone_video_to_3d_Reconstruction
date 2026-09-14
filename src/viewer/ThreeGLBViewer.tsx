@@ -531,12 +531,23 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             mesh.material = orig;
           } else {
             const m = orig as any;
-            mesh.material = new THREE.MeshBasicMaterial({
-              map: m.map || null,
-              color: m.color || new THREE.Color(0xffffff),
-              side: THREE.DoubleSide,
-              wireframe: wireframe,
-            });
+            if (isUltraLow) {
+              mesh.material = new THREE.MeshBasicMaterial({
+                map: m.map || null,
+                color: m.color || new THREE.Color(0xffffff),
+                side: THREE.DoubleSide,
+                wireframe: wireframe,
+              });
+            } else {
+              mesh.material = new THREE.MeshStandardMaterial({
+                map: m.map || null,
+                color: m.color || new THREE.Color(0xffffff),
+                roughness: 0.6,
+                metalness: 0.1,
+                side: THREE.DoubleSide,
+                wireframe: wireframe,
+              });
+            }
           }
         } else if (isUltraLow) {
           mesh.material = new THREE.MeshBasicMaterial({

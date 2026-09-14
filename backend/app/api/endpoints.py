@@ -176,9 +176,9 @@ def start_reconstruction(project_id: str):
                     break
 
     if v_path and v_path.exists():
-        from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
-        builder = ConstructionMeshBuilder(str(proj_dir))
-        builder.generate_project_glb(str(v_path), str(proj_dir / "model.glb"))
+        from reconstruction.photogrammetry_engine import PhotogrammetryEngine
+        engine = PhotogrammetryEngine(str(proj_dir))
+        engine.process_video_reconstruction(str(v_path), str(proj_dir / "model.glb"))
 
     proj["status"] = "COMPLETED"
     project_service._save_db()
@@ -259,17 +259,17 @@ def get_project_model_info(project_id: str):
 
     # Build GLB if missing or if it's the old 63MB Untitled.glb file
     if not glb_path.exists() or os.path.getsize(glb_path) > 5 * 1024 * 1024:
-        from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
-        builder = ConstructionMeshBuilder(str(proj_dir))
+        from reconstruction.photogrammetry_engine import PhotogrammetryEngine
+        engine = PhotogrammetryEngine(str(proj_dir))
         v_str = str(v_path) if (v_path and v_path.exists()) else ""
-        builder.generate_project_glb(v_str, str(glb_path))
+        engine.process_video_reconstruction(v_str, str(glb_path))
         
     return {
         "project_id": project_id,
         "name": f"Reconstructed 3D Mesh ({proj.get('name', 'Project')})",
         "filename": "model.glb",
         "download_url": f"/api/v1/projects/{project_id}/files/model.glb",
-        "size_mb": round(os.path.getsize(glb_path) / (1024 * 1024), 2) if glb_path.exists() else 0.71,
+        "size_mb": round(os.path.getsize(glb_path) / (1024 * 1024), 2) if glb_path.exists() else 0.94,
         "status": proj.get("status", "CREATED")
     }
 
@@ -289,10 +289,10 @@ def serve_project_file(project_id: str, filename: str):
                         if f.lower().endswith(".mp4"):
                             v_path = proj_dir / f
                             break
-            from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
-            builder = ConstructionMeshBuilder(str(proj_dir))
+            from reconstruction.photogrammetry_engine import PhotogrammetryEngine
+            engine = PhotogrammetryEngine(str(proj_dir))
             v_str = str(v_path) if (v_path and v_path.exists()) else ""
-            builder.generate_project_glb(v_str, str(file_path))
+            engine.process_video_reconstruction(v_str, str(file_path))
         elif filename == "model.obj":
             from reconstruction.mesh.processor import MeshProcessorService
             MeshProcessorService(str(proj_dir)).generate_demo_mesh(str(file_path))
