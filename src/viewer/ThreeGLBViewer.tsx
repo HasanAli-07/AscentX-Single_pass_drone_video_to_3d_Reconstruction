@@ -322,15 +322,15 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     cameraZ = Math.max(cameraZ, 20);
 
     cameraRef.current.position.set(center.x + cameraZ * 0.7, center.y + cameraZ * 0.5, center.z + cameraZ * 0.8);
-    cameraRef.current.near = cameraZ / 100;
-    cameraRef.current.far = cameraZ * 100;
+    cameraRef.current.near = Math.max(0.1, cameraZ / 100);
+    cameraRef.current.far = Math.max(10000, cameraZ * 100);
     cameraRef.current.updateProjectionMatrix();
 
     controlsRef.current.target.copy(center);
     controlsRef.current.update();
   };
 
-  // Load 3D GLB / GLTF Model with DRACO Optimization
+  // Load 3D GLB / GLTF Model with Robust Fallbacks
   useEffect(() => {
     if (!sceneRef.current || !selectedModelUrl) return;
 
@@ -345,121 +345,127 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
       loadedModelRef.current = null;
     }
 
-    fetch(selectedModelUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.arrayBuffer();
-      })
-      .then((buffer) => {
-        setLoadProgress(60);
+    const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
+    loader.setDRACOLoader(dracoLoader);
 
-        const loader = new GLTFLoader();
-        
-        // Setup Draco Decoder support for compressed GLBs
-        const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
-        loader.setDRACOLoader(dracoLoader);
+    const onModelLoaded = (gltf: any) => {
+      try {
+        const model = gltf.scene;
 
-        loader.parse(
-          buffer,
-          "",
-          (gltf) => {
-            const model = gltf.scene;
+        let meshCount = 0;
+        let vertCount = 0;
+        let faceCount = 0;
 
-            let meshCount = 0;
-            let vertCount = 0;
-            let faceCount = 0;
+        const isUltraLow = qualityPreset === "ULTRA_LOW";
 
-            const isUltraLow = qualityPreset === "ULTRA_LOW";
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            meshCount++;
+            mesh.frustumCulled = true;
 
-            // Apply Frustum Culling & Texture Optimization
-            model.traverse((child) => {
-              if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh;
-                meshCount++;
-                mesh.frustumCulled = true;
+            mesh.castShadow = qualityPreset === "HIGH";
+            mesh.receiveShadow = qualityPreset === "HIGH";
 
-                mesh.castShadow = qualityPreset === "HIGH";
-                mesh.receiveShadow = qualityPreset === "HIGH";
-
-                if (mesh.geometry) {
-                  const pos = mesh.geometry.attributes.position;
-                  if (pos) vertCount += pos.count;
-                  if (mesh.geometry.index) {
-                    faceCount += mesh.geometry.index.count / 3;
-                  } else if (pos) {
-                    faceCount += pos.count / 3;
-                  }
-                }
-
-                // Cache original material
-                originalMaterialsRef.current.set(mesh, mesh.material);
-
-                // Enforce double-sided face rendering for aerial drone models
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach((m) => (m.side = THREE.DoubleSide));
-                } else if (mesh.material) {
-                  mesh.material.side = THREE.DoubleSide;
-                }
+            if (mesh.geometry) {
+              const pos = mesh.geometry.attributes.position;
+              if (pos) vertCount += pos.count;
+              if (mesh.geometry.index) {
+                faceCount += mesh.geometry.index.count / 3;
+              } else if (pos) {
+                faceCount += pos.count / 3;
               }
-            });
+            }
 
-            optimizeTexturesForLowConfig(model, isUltraLow);
+            originalMaterialsRef.current.set(mesh, mesh.material);
 
-            setModelStats({
-              meshes: meshCount,
-              vertices: vertCount,
-              faces: Math.round(faceCount),
-            });
-
-            // Center model on ground level grid
-            model.updateMatrixWorld(true);
-            const bbox = new THREE.Box3().setFromObject(model);
-            const center = bbox.getCenter(new THREE.Vector3());
-
-            model.position.set(-center.x, -bbox.min.y, -center.z);
-            model.updateMatrixWorld(true);
-            model.traverse((c) => c.updateMatrixWorld(true));
-
-            loadedModelRef.current = model;
-            sceneRef.current?.add(model);
-
-            fitCameraToModel(model);
-
-
-            setLoadingModel(false);
-            setLoadProgress(100);
-          },
-          (err) => {
-            throw err;
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((m) => (m.side = THREE.DoubleSide));
+            } else if (mesh.material) {
+              mesh.material.side = THREE.DoubleSide;
+            }
           }
-        );
-      })
-      .catch((err) => {
-        console.warn("Using procedural 3D model fallback:", err);
-
-        const group = new THREE.Group();
-        const mat = new THREE.MeshLambertMaterial({
-          color: new THREE.Color(modelColor),
-          side: THREE.DoubleSide,
         });
 
-        const body = new THREE.Mesh(new THREE.BoxGeometry(24, 48, 18), mat);
-        body.position.y = 24;
-        group.add(body);
+        optimizeTexturesForLowConfig(model, isUltraLow);
 
-        const pod = new THREE.Mesh(new THREE.BoxGeometry(38, 10, 28), mat);
-        pod.position.y = 5;
-        group.add(pod);
+        setModelStats({
+          meshes: meshCount,
+          vertices: vertCount,
+          faces: Math.round(faceCount),
+        });
 
-        loadedModelRef.current = group;
-        sceneRef.current?.add(group);
+        // Center model on ground level grid
+        model.updateMatrixWorld(true);
+        const bbox = new THREE.Box3().setFromObject(model);
+        const center = bbox.getCenter(new THREE.Vector3());
 
-        setModelStats({ meshes: 2, vertices: 48, faces: 24 });
-        fitCameraToModel(group);
+        model.position.set(-center.x, -bbox.min.y, -center.z);
+        model.updateMatrixWorld(true);
+        model.traverse((c) => c.updateMatrixWorld(true));
+
+        loadedModelRef.current = model;
+        sceneRef.current?.add(model);
+
+        fitCameraToModel(model);
+      } catch (err) {
+        console.error("Error configuring loaded GLTF model:", err);
+      } finally {
         setLoadingModel(false);
         setLoadProgress(100);
+      }
+    };
+
+    const renderProceduralFallback = () => {
+      console.warn("Using procedural 3D model fallback");
+
+      const group = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(modelColor),
+        side: THREE.DoubleSide,
       });
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(24, 48, 18), mat);
+      body.position.y = 24;
+      group.add(body);
+
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(38, 10, 28), mat);
+      pod.position.y = 5;
+      group.add(pod);
+
+      loadedModelRef.current = group;
+      sceneRef.current?.add(group);
+
+      setModelStats({ meshes: 2, vertices: 48, faces: 24 });
+      fitCameraToModel(group);
+      setLoadingModel(false);
+      setLoadProgress(100);
+    };
+
+    loader.load(
+      selectedModelUrl,
+      onModelLoaded,
+      (xhr) => {
+        if (xhr.lengthComputable && xhr.total > 0) {
+          setLoadProgress(Math.min(95, Math.round((xhr.loaded / xhr.total) * 100)));
+        }
+      },
+      (err) => {
+        console.warn("GLTFLoader with Draco failed, attempting plain GLTFLoader:", err);
+        const plainLoader = new GLTFLoader();
+        plainLoader.load(
+          selectedModelUrl,
+          onModelLoaded,
+          undefined,
+          (err2) => {
+            console.error("All 3D model file loading attempts failed:", err2);
+            renderProceduralFallback();
+          }
+        );
+      }
+    );
   }, [selectedModelUrl]);
 
   // Update Scale
@@ -646,7 +652,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
                         : "bg-[#131418] text-slate-400 border-[#2a2b31] hover:text-slate-200"
                     }`}
                   >
-                    {q === "ULTRA_LOW" ? "⚡ ULTRA LOW" : q === "LOW" ? "🔋 LOW GPU" : q === "BALANCED" ? "秤 BALANCED" : "✨ HIGH PBR"}
+                    {q === "ULTRA_LOW" ? "⚡ ULTRA LOW" : q === "LOW" ? "🔋 LOW GPU" : q === "BALANCED" ? "⚖️ BALANCED" : "✨ HIGH PBR"}
                   </button>
                 ))}
               </div>

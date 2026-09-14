@@ -32,13 +32,21 @@ export async function fetchSourceModels(): Promise<SourceModelInfo[]> {
     const res = await fetch(`${API_BASE_URL}/source-models`);
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) return data;
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((item: any) => ({
+          ...item,
+          download_url: item.download_url.startsWith("http")
+            ? item.download_url
+            : `${API_BASE_URL}${item.download_url.replace("/api/v1", "")}`,
+        }));
+      }
     }
   } catch (e) {
     console.warn("Using default source models list");
   }
   return defaultModels;
 }
+
 
 export async function fetchProjectModelInfo(projectId: string, projectName: string): Promise<SourceModelInfo> {
   try {
