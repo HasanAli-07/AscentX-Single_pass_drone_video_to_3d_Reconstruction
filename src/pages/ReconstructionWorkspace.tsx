@@ -10,15 +10,26 @@ interface ReconstructionWorkspaceProps {
 }
 
 export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }: ReconstructionWorkspaceProps) {
-  const isInitiallyCompleted = project?.status === "COMPLETED";
+  const isCompleted = project?.status === "COMPLETED";
 
-  const [activeStageIdx, setActiveStageIdx] = useState<number>(isInitiallyCompleted ? 8 : 0);
+  const [activeStageIdx, setActiveStageIdx] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [completedStages, setCompletedStages] = useState<Set<number>>(
-    isInitiallyCompleted ? new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]) : new Set()
-  );
-  const [stageProgress, setStageProgress] = useState<number>(isInitiallyCompleted ? 100 : 0);
+  const [completedStages, setCompletedStages] = useState<Set<number>>(new Set());
+  const [stageProgress, setStageProgress] = useState<number>(0);
+
+  // Sync completion state with project status
+  useEffect(() => {
+    if (project?.status === "COMPLETED") {
+      setCompletedStages(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]));
+      setActiveStageIdx(8);
+      setStageProgress(100);
+    } else if (!isRunning) {
+      setCompletedStages(new Set());
+      setActiveStageIdx(0);
+      setStageProgress(0);
+    }
+  }, [project?.id, project?.status]);
 
   const stagesDef = [
     { name: "Frame Processing & Decoding", time: "00:18", gpu: 0, defaultOutput: `${(project?.total_frames || 600).toLocaleString()} frames decoded` },
@@ -32,19 +43,24 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
     { name: "Georeferencing Spatial Alignment", time: "00:12", gpu: 10, defaultOutput: project?.coordinate_system || "WGS84 / UTM Zone 33N" },
   ];
 
-  // Simulation timer for realistic 3D reconstruction progression
+  // Pipeline simulation step timer
   useEffect(() => {
     if (!isRunning || isPaused) return;
 
     const interval = setInterval(() => {
       setStageProgress((prev) => {
         if (prev >= 100) {
-          setCompletedStages((c) => new Set(c).add(activeStageIdx));
+          setCompletedStages((c) => {
+            const nextSet = new Set(c);
+            nextSet.add(activeStageIdx);
+            return nextSet;
+          });
+
           if (activeStageIdx < stagesDef.length - 1) {
             setActiveStageIdx((idx) => idx + 1);
             return 0;
           } else {
-            // Pipeline Completed
+            // All 9 stages complete!
             setIsRunning(false);
             if (project) {
               const updated: Project = {
@@ -59,20 +75,24 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
             return 100;
           }
         }
-        return prev + 15;
+        return prev + 25; // Advances step progress cleanly
       });
-    }, 400);
+    }, 350);
 
     return () => clearInterval(interval);
-  }, [isRunning, isPaused, activeStageIdx, project]);
+  }, [isRunning, isPaused, activeStageIdx, project, onUpdateProject]);
 
   const handleStart = async () => {
     if (!project) return;
+    setCompletedStages(new Set());
+    setActiveStageIdx(0);
+    setStageProgress(0);
     setIsRunning(true);
     setIsPaused(false);
-    setActiveStageIdx(0);
-    setCompletedStages(new Set());
-    setStageProgress(0);
+
+    if (onUpdateProject) {
+      onUpdateProject({ ...project, status: "RECONSTRUCTING" });
+    }
 
     await startReconstructionJob(project.id);
   };
@@ -82,29 +102,39 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
   const handleCancel = () => {
     setIsRunning(false);
     setIsPaused(false);
+    setCompletedStages(new Set());
     setStageProgress(0);
+    if (project && onUpdateProject) {
+      onUpdateProject({ ...project, status: "VALIDATED" });
+    }
   };
 
-  const isFinished = completedStages.size === stagesDef.length;
+  const isAllDone = completedStages.size === stagesDef.length || isCompleted;
 
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 font-mono text-xs text-slate-200">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          {!isRunning && !isFinished && (
-            <Btn label="START RECONSTRUCTION" variant="primary" onClick={handleStart} />
+      {/* Header controls & Status */}
+      <div className="flex items-center justify-between bg-[#18191d] p-3 rounded-lg border border-[#2a2b31]">
+        <div className="flex items-center gap-2">
+          {!isRunning && !isAllDone && (
+            <button
+              onClick={handleStart}
+              className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-bold hover:bg-cyan-500/30 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              ▶ START RECONSTRUCTION PIPELINE
+            </button>
           )}
           {isRunning && !isPaused && (
-            <Btn label="PAUSE" variant="ghost" onClick={handlePause} />
+            <Btn label="⏸ PAUSE" variant="ghost" onClick={handlePause} />
           )}
           {isRunning && isPaused && (
-            <Btn label="RESUME" variant="primary" onClick={handleResume} />
+            <Btn label="▶ RESUME" variant="primary" onClick={handleResume} />
           )}
           {isRunning && (
-            <Btn label="CANCEL" variant="danger" onClick={handleCancel} />
+            <Btn label="✖ CANCEL" variant="danger" onClick={handleCancel} />
           )}
-          {isFinished && (
-            <Btn label="RE-RUN RECONSTRUCTION" variant="secondary" onClick={handleStart} />
+          {isAllDone && (
+            <Btn label="🔄 RE-RUN RECONSTRUCTION" variant="secondary" onClick={handleStart} />
           )}
         </div>
 
@@ -112,10 +142,10 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
           <div className="text-slate-400 text-xs font-semibold">
             PROJECT: <span className="text-cyan-400">{project?.name || "scan_session_2024_11_08"}</span> ({project?.id})
           </div>
-          {isFinished && onNavigate && (
+          {isAllDone && onNavigate && (
             <button
               onClick={() => onNavigate("visualization")}
-              className="px-3 py-1.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 animate-pulse"
+              className="px-4 py-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 animate-pulse"
             >
               🎯 VIEW RECONSTRUCTED 3D MODEL ➔
             </button>
@@ -123,18 +153,37 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
         </div>
       </div>
 
+      {/* Completion Banner */}
+      {isAllDone && (
+        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 text-sm font-bold">🎉 3D RECONSTRUCTION COMPLETE!</span>
+            <span className="text-slate-300 text-xs">Sparse Cloud: 184,392 pts | Dense Mesh: 4,200,000 pts</span>
+          </div>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate("visualization")}
+              className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 cursor-pointer"
+            >
+              OPEN 3D VISUALIZER
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Reconstruction Pipeline Stage Cards */}
       <div className="rounded-lg overflow-hidden bg-[#18191d] border border-[#2a2b31]">
-        <div className="px-3 py-2 border-b border-[#1f2025] flex justify-between items-center">
-          <span className="stat-label text-slate-400 font-semibold">SINGLE-PASS RECONSTRUCTION ENGINE PIPELINE</span>
+        <div className="px-3 py-2 border-b border-[#1f2025] flex justify-between items-center bg-[#131418]">
+          <span className="stat-label text-slate-400 font-semibold">SINGLE-PASS RECONSTRUCTION STAGE EXECUTION</span>
           <Badge
-            label={isFinished ? "COMPLETED" : isRunning ? (isPaused ? "PAUSED" : "RUNNING") : "READY TO START"}
-            variant={isFinished ? "ok" : isRunning ? "running" : "neutral"}
+            label={isAllDone ? "COMPLETED" : isRunning ? (isPaused ? "PAUSED" : "RUNNING") : "READY TO START"}
+            variant={isAllDone ? "ok" : isRunning ? "running" : "neutral"}
           />
         </div>
 
         {stagesDef.map((s, i) => {
-          const isDone = completedStages.has(i);
-          const isCurrent = isRunning && activeStageIdx === i;
+          const isDone = completedStages.has(i) || isAllDone;
+          const isCurrent = isRunning && activeStageIdx === i && !isAllDone;
           const isQueued = !isDone && !isCurrent;
           const currentPct = isDone ? 100 : isCurrent ? stageProgress : 0;
 
