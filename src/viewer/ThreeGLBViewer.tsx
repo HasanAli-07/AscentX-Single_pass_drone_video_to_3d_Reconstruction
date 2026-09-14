@@ -429,34 +429,35 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
           faces: Math.round(faceCount),
         });
 
-        // Compute original bounding box & normalize model scale to 60 units
+        // Wrap model in container Group for rock-solid centering & scaling
         model.updateMatrixWorld(true);
-        let scaleFactor = 1.0;
         const bbox = new THREE.Box3().setFromObject(model);
+        let scaleFactor = 1.0;
+
         if (!bbox.isEmpty()) {
+          const center = bbox.getCenter(new THREE.Vector3());
           const size = bbox.getSize(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
           if (maxDim > 0) {
             scaleFactor = 60.0 / maxDim;
           }
+          // Center model inside local wrapper space
+          model.position.set(-center.x, -bbox.min.y, -center.z);
         }
 
         baseScaleRef.current = scaleFactor;
-        const finalScale = scaleFactor * modelScale;
-        model.scale.set(finalScale, finalScale, finalScale);
-        model.updateMatrixWorld(true);
+        const wrapper = new THREE.Group();
+        wrapper.name = "ModelWrapperGroup";
+        wrapper.add(model);
 
-        const scaledBbox = new THREE.Box3().setFromObject(model);
-        const center = scaledBbox.getCenter(new THREE.Vector3());
+        const initialScale = scaleFactor * modelScale;
+        wrapper.scale.set(initialScale, initialScale, initialScale);
+        wrapper.updateMatrixWorld(true);
 
-        model.position.set(-center.x, -scaledBbox.min.y, -center.z);
-        model.updateMatrixWorld(true);
-        model.traverse((c: THREE.Object3D) => c.updateMatrixWorld(true));
+        loadedModelRef.current = wrapper;
+        sceneRef.current?.add(wrapper);
 
-        loadedModelRef.current = model;
-        sceneRef.current?.add(model);
-
-        fitCameraToModel(model);
+        fitCameraToModel(wrapper);
       } catch (err) {
         console.error("Error configuring loaded GLTF model:", err);
       } finally {
