@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
-import { FrameMetric } from "../types";
+import { Project, FrameMetric } from "../types";
 import { Badge, Btn } from "../components/SharedPrimitives";
 import { runFrameAnalysis } from "../services/api";
 
-export function FrameWorkspace() {
+interface FrameWorkspaceProps {
+  project: Project | null;
+}
+
+export function FrameWorkspace({ project }: FrameWorkspaceProps) {
   const [frames, setFrames] = useState<FrameMetric[]>([]);
   const [reduction, setReduction] = useState<number>(34.6);
   const [loading, setLoading] = useState<boolean>(false);
@@ -18,11 +22,12 @@ export function FrameWorkspace() {
 
   useEffect(() => {
     loadFrameData();
-  }, []);
+  }, [project?.id]);
 
   const loadFrameData = async () => {
     setLoading(true);
-    const res = await runFrameAnalysis("PRJ-2026-004A");
+    const targetId = project?.id || "PRJ-2026-004A";
+    const res = await runFrameAnalysis(targetId);
     setFrames(res.frames);
     setReduction(res.reduction_percentage);
     setLoading(false);

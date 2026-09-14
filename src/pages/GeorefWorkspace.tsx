@@ -1,12 +1,23 @@
+import { Project } from "../types";
 import { StatRow, Btn } from "../components/SharedPrimitives";
 
-export function GeorefWorkspace() {
+interface GeorefWorkspaceProps {
+  project: Project | null;
+}
+
+export function GeorefWorkspace({ project }: GeorefWorkspaceProps) {
   return (
-    <div className="flex-1 flex overflow-hidden p-4 gap-4">
+    <div className="flex-1 flex overflow-hidden p-4 gap-4 font-mono text-xs text-slate-200">
       <div className="flex-1 flex flex-col gap-4 overflow-y-auto">
+        {/* Header Badge */}
+        <div className="flex justify-between items-center bg-[#18191d] p-3 rounded-lg border border-[#2a2b31]">
+          <span className="stat-label text-slate-400 font-semibold">GEOREFERENCING & SPATIAL ALIGNMENT</span>
+          <span className="text-cyan-400 font-semibold">{project?.name || "scan_session_2024_11_08"} ({project?.id})</span>
+        </div>
+
         {/* Map visualization canvas */}
-        <div className="rounded-lg overflow-hidden" style={{ background: "#18191d", border: "1px solid #2a2b31", height: 200 }}>
-          <div className="w-full h-full relative" style={{ background: "#0e1420" }}>
+        <div className="rounded-lg overflow-hidden bg-[#18191d] border border-[#2a2b31] h-[220px]">
+          <div className="w-full h-full relative bg-[#0e1420]">
             <svg className="w-full h-full" viewBox="0 0 400 180">
               {Array.from({ length: 12 }, (_, i) => <line key={`h${i}`} x1="0" y1={i * 15} x2="400" y2={i * 15} stroke="#1a2030" strokeWidth="0.5" />)}
               {Array.from({ length: 27 }, (_, i) => <line key={`v${i}`} x1={i * 15} y1="0" x2={i * 15} y2="180" stroke="#1a2030" strokeWidth="0.5" />)}
@@ -21,8 +32,8 @@ export function GeorefWorkspace() {
             <div className="absolute bottom-2 left-3 flex gap-3">
               {[
                 { col: "#3d7fff", label: "Flight Path" },
-                { col: "#00c8d4", label: "Model" },
-                { col: "#22c55e", label: "Reference" },
+                { col: "#00c8d4", label: "Model Bounding Box" },
+                { col: "#22c55e", label: "RTK Reference Point" },
                 { col: "#f59e0b", label: "Waypoints" },
               ].map((l) => (
                 <div key={l.label} className="flex items-center gap-1">
@@ -35,17 +46,17 @@ export function GeorefWorkspace() {
         </div>
 
         {/* Coordinate data */}
-        <div className="rounded-lg p-4" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-          <div className="stat-label mb-3" style={{ color: "#4a4d5a" }}>COORDINATE REFERENCE SYSTEM</div>
-          <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-            <StatRow label="Coordinate System" value="WGS84 UTM 33N" />
-            <StatRow label="GPS Accuracy" value="±2 cm" accent />
-            <StatRow label="Latitude" value="48.8566°N" />
-            <StatRow label="RTK Status" value="FIXED" accent />
-            <StatRow label="Longitude" value="2.3522°E" />
-            <StatRow label="Scale Factor" value="0.99998" />
-            <StatRow label="Altitude" value="82.4 m (MSL)" />
-            <StatRow label="North Direction" value="0.00°" />
+        <div className="rounded-lg p-4 bg-[#18191d] border border-[#2a2b31]">
+          <div className="stat-label mb-3 text-slate-400">COORDINATE REFERENCE SYSTEM & GEODETIC METRICS</div>
+          <div className="grid gap-2 grid-cols-2">
+            <StatRow label="Coordinate System" value={project?.coordinate_system || "WGS84 / UTM Zone 33N"} />
+            <StatRow label="GPS Accuracy" value="±2.0 cm (RTK Fixed)" accent />
+            <StatRow label="Latitude" value={`${project?.latitude_deg || 48.8566}° N`} />
+            <StatRow label="RTK / PPK Status" value={project?.has_imu ? "RTK FIXED" : "FLOAT"} accent />
+            <StatRow label="Longitude" value={`${project?.longitude_deg || 2.3522}° E`} />
+            <StatRow label="Grid Scale Factor" value="0.99998" />
+            <StatRow label="Ellipsoidal Altitude" value={`${project?.altitude_m || 82.4} m`} />
+            <StatRow label="Grid Convergence Angle" value="0.00°" />
           </div>
         </div>
 

@@ -64,6 +64,26 @@ def get_project(project_id: str):
         raise HTTPException(status_code=404, detail="Project not found")
     return proj
 
+@router.patch("/projects/{project_id}")
+def update_project(project_id: str, payload: dict):
+    proj = project_service.get_project(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    for k, v in payload.items():
+        proj[k] = v
+    project_service._save_db()
+    return proj
+
+@router.get("/projects/{project_id}/video")
+def serve_project_video(project_id: str):
+    proj = project_service.get_project(project_id)
+    if not proj or not proj.get("video_filename"):
+        raise HTTPException(status_code=404, detail="Video not uploaded for this project")
+    v_path = settings.STORAGE_DIR / project_id / proj["video_filename"]
+    if not v_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    return FileResponse(str(v_path), media_type="video/mp4")
+
 @router.post("/projects/{project_id}/upload")
 async def upload_project_files(
     project_id: str,
