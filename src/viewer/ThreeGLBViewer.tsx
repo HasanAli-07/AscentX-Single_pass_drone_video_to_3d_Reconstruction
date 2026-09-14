@@ -58,12 +58,18 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
       setSourceModels(modelList);
 
       if (modelList.length > 0) {
-        setSelectedModelUrl(modelList[0].download_url);
+        const nextUrl = modelList[0].download_url;
+        setSelectedModelUrl((current) => {
+          if (!current || current.split("?")[0] !== nextUrl.split("?")[0]) {
+            return nextUrl;
+          }
+          return current;
+        });
         setSelectedModelName(modelList[0].name);
       }
     }
     loadModels();
-  }, [activeProject?.id, activeProject?.name, activeProject?.status]);
+  }, [activeProject?.id, activeProject?.name]);
 
   // Dispose unneeded geometries, textures, materials to prevent VRAM memory leaks
   const disposeHierarchy = (object: THREE.Object3D) => {

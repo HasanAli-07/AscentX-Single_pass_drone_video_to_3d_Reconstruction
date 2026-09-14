@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Project } from "../types";
 import { Badge, Btn } from "../components/SharedPrimitives";
 import { startReconstructionJob, updateProjectDetails } from "../services/api";
@@ -75,9 +75,17 @@ export function ReconstructionWorkspace({
     await startReconstructionJob(project.id);
   }, [project, onUpdateProject]);
 
-  // Handle auto-start trigger from quick controls
+  const lastProcessedTriggerRef = useRef<number>(0);
+
+  // Handle auto-start trigger from quick controls (fires ONCE per trigger)
   useEffect(() => {
-    if (autoStartTrigger && autoStartTrigger > 0 && !isRunning) {
+    if (
+      autoStartTrigger &&
+      autoStartTrigger > 0 &&
+      autoStartTrigger !== lastProcessedTriggerRef.current &&
+      !isRunning
+    ) {
+      lastProcessedTriggerRef.current = autoStartTrigger;
       handleStart();
     }
   }, [autoStartTrigger, handleStart, isRunning]);
