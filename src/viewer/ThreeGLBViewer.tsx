@@ -21,6 +21,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const loadedModelRef = useRef<THREE.Group | THREE.Object3D | null>(null);
+  const baseScaleRef = useRef<number>(1.0);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
 
   const [sourceModels, setSourceModels] = useState<SourceModelInfo[]>([]);
@@ -366,7 +367,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
         const isUltraLow = qualityPreset === "ULTRA_LOW";
 
-        model.traverse((child) => {
+        model.traverse((child: THREE.Object3D) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
             meshCount++;
@@ -409,23 +410,27 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
         // Compute original bounding box & normalize model scale to 60 units
         model.updateMatrixWorld(true);
+        let scaleFactor = 1.0;
         const bbox = new THREE.Box3().setFromObject(model);
         if (!bbox.isEmpty()) {
           const size = bbox.getSize(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
           if (maxDim > 0) {
-            const scaleFactor = 60.0 / maxDim;
-            model.scale.set(scaleFactor, scaleFactor, scaleFactor);
-            model.updateMatrixWorld(true);
+            scaleFactor = 60.0 / maxDim;
           }
-
-          const scaledBbox = new THREE.Box3().setFromObject(model);
-          const center = scaledBbox.getCenter(new THREE.Vector3());
-
-          model.position.set(-center.x, -scaledBbox.min.y, -center.z);
-          model.updateMatrixWorld(true);
-          model.traverse((c) => c.updateMatrixWorld(true));
         }
+
+        baseScaleRef.current = scaleFactor;
+        const finalScale = scaleFactor * modelScale;
+        model.scale.set(finalScale, finalScale, finalScale);
+        model.updateMatrixWorld(true);
+
+        const scaledBbox = new THREE.Box3().setFromObject(model);
+        const center = scaledBbox.getCenter(new THREE.Vector3());
+
+        model.position.set(-center.x, -scaledBbox.min.y, -center.z);
+        model.updateMatrixWorld(true);
+        model.traverse((c: THREE.Object3D) => c.updateMatrixWorld(true));
 
         loadedModelRef.current = model;
         sceneRef.current?.add(model);
@@ -441,6 +446,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
     const renderProceduralFallback = () => {
       console.warn("Using procedural 3D model fallback");
+      baseScaleRef.current = 1.0;
 
       const group = new THREE.Group();
       const mat = new THREE.MeshLambertMaterial({
@@ -492,7 +498,8 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
   // Update Scale
   useEffect(() => {
     if (!loadedModelRef.current) return;
-    loadedModelRef.current.scale.set(modelScale, modelScale, modelScale);
+    const effectiveScale = baseScaleRef.current * modelScale;
+    loadedModelRef.current.scale.set(effectiveScale, effectiveScale, effectiveScale);
   }, [modelScale]);
 
   // Update Materials & Quality Preset Shader Modes
