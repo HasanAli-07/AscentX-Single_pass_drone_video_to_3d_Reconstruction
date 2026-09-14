@@ -75,7 +75,7 @@ export default function App() {
           />
         );
       case "frames":
-        return <FrameWorkspace project={activeProject} />;
+        return <FrameWorkspace project={activeProject} onNavigate={setActiveSection} />;
       case "reconstruction":
         return <ReconstructionWorkspace project={activeProject} />;
       case "georef":

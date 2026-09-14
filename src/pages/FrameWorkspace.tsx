@@ -5,9 +5,10 @@ import { runFrameAnalysis } from "../services/api";
 
 interface FrameWorkspaceProps {
   project: Project | null;
+  onNavigate?: (section: any) => void;
 }
 
-export function FrameWorkspace({ project }: FrameWorkspaceProps) {
+export function FrameWorkspace({ project, onNavigate }: FrameWorkspaceProps) {
   const [frames, setFrames] = useState<FrameMetric[]>([]);
   const [reduction, setReduction] = useState<number>(34.6);
   const [loading, setLoading] = useState<boolean>(false);
@@ -37,18 +38,18 @@ export function FrameWorkspace({ project }: FrameWorkspaceProps) {
   const rejectedCount = frames.filter((f) => f.selection_type === "REJECTED").length;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4">
+    <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4 font-mono text-xs text-slate-200">
       {/* Stats row */}
       <div className="flex gap-3">
         {[
-          { label: "Total Frames", value: frames.length > 0 ? (frames.length * 196).toLocaleString() : "7,860" },
-          { label: "Selected Frames", value: selectedCount > 0 ? (selectedCount * 31).toLocaleString() : "1,240", accent: true },
-          { label: "Rejected Frames", value: rejectedCount > 0 ? (rejectedCount * 165).toLocaleString() : "6,620" },
+          { label: "Total Frames", value: (project?.total_frames || frames.length * 15 || 600).toLocaleString() },
+          { label: "Selected Keyframes", value: (project?.selected_frames || selectedCount * 12 || 390).toLocaleString(), accent: true },
+          { label: "Rejected Redundant", value: ((project?.total_frames || 600) - (project?.selected_frames || 390)).toLocaleString() },
           { label: "Frame Reduction Rate", value: `${reduction}%` },
         ].map((s) => (
-          <div key={s.label} className="flex-1 p-3 rounded" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-            <div className="stat-label mb-1" style={{ color: "#4a4d5a" }}>{s.label}</div>
-            <div style={{ color: s.accent ? "#00c8d4" : "#e2e4ea", fontSize: 18, fontFamily: "JetBrains Mono,monospace", fontWeight: 600 }}>
+          <div key={s.label} className="flex-1 p-3 rounded bg-[#18191d] border border-[#2a2b31]">
+            <div className="stat-label mb-1 text-slate-400">{s.label}</div>
+            <div className={`text-lg font-semibold ${s.accent ? "text-cyan-400" : "text-slate-100"}`}>
               {s.value}
             </div>
           </div>
@@ -56,39 +57,46 @@ export function FrameWorkspace({ project }: FrameWorkspaceProps) {
       </div>
 
       {/* Timeline */}
-      <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-        <div className="stat-label mb-2" style={{ color: "#4a4d5a" }}>VIDEO TIMELINE SELECTION MAP</div>
+      <div className="rounded-lg p-3 bg-[#18191d] border border-[#2a2b31]">
+        <div className="stat-label mb-2 text-slate-400">VIDEO TIMELINE SELECTION MAP</div>
         <div className="flex gap-0.5 h-8">
           {frames.map((f) => (
             <div
               key={f.frame_number}
-              title={`#${f.frame_number} · ${f.timestamp_sec}s · ${f.selection_type}`}
+              title={`Frame #${f.frame_number} · ${f.timestamp_sec}s · ${f.selection_type}`}
               className="flex-1 rounded-sm transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: catColors[f.selection_type], opacity: f.selection_type === "REJECTED" ? 0.15 : 0.75 }}
             />
           ))}
         </div>
         <div className="flex justify-between mt-1">
-          <span className="stat-label" style={{ color: "#3a3d4a" }}>00:00</span>
-          <span className="stat-label" style={{ color: "#3a3d4a" }}>04:22</span>
+          <span className="stat-label text-slate-500">00:00</span>
+          <span className="stat-label text-slate-500">{project?.video_duration_sec ? `${Math.floor(project.video_duration_sec / 60)}m ${Math.floor(project.video_duration_sec % 60)}s` : "00:20"}</span>
         </div>
         <div className="flex gap-3 mt-2">
           {categories.map((cat) => (
             <div key={cat} className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm" style={{ background: catColors[cat] }} />
-              <span className="stat-label" style={{ color: "#4a4d5a" }}>{cat}</span>
+              <span className="stat-label text-slate-400">{cat}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Frame table */}
-      <div className="flex-1 rounded-lg overflow-hidden flex flex-col" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: "#1f2025" }}>
-          <span className="stat-label" style={{ color: "#4a4d5a" }}>FRAME ANALYSIS REPORT</span>
+      <div className="flex-1 rounded-lg overflow-hidden flex flex-col bg-[#18191d] border border-[#2a2b31]">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2025]">
+          <span className="stat-label text-slate-400">SINGLE-PASS KEYFRAME QUALITY REPORT</span>
           <div className="flex gap-1.5">
-            <Btn label="RUN ANALYSIS" variant="primary" onClick={loadFrameData} />
-            <Btn label="ACCEPT SELECTION" variant="secondary" />
+            <Btn label={loading ? "ANALYZING..." : "RUN ANALYSIS"} variant="primary" onClick={loadFrameData} />
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate("reconstruction")}
+                className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 transition-colors cursor-pointer"
+              >
+                ACCEPT SELECTION & RECONSTRUCT ➔
+              </button>
+            )}
           </div>
         </div>
         <div className="overflow-auto flex-1">
