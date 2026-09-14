@@ -80,11 +80,11 @@ class ProjectService:
                 coordinate_system=p.get("coordinate_system", "WGS84 / UTM Zone 33N"),
                 video_filename=p.get("video_filename"),
                 video_url=p.get("video_url"),
-                video_resolution=p.get("video_resolution", "3840x2160"),
-                video_fps=p.get("video_fps", 30.0),
-                video_duration_sec=p.get("video_duration_sec", 262.0),
-                video_file_size_mb=p.get("video_file_size_mb", 2800.0),
-                video_codec=p.get("video_codec", "H.264 / AVC"),
+                video_resolution=p.get("video_resolution"),
+                video_fps=p.get("video_fps"),
+                video_duration_sec=p.get("video_duration_sec"),
+                video_file_size_mb=p.get("video_file_size_mb"),
+                video_codec=p.get("video_codec"),
                 total_frames=p.get("total_frames", 0),
                 selected_frames=p.get("selected_frames", 0),
                 sparse_points=p.get("sparse_points", 0),
@@ -92,12 +92,12 @@ class ProjectService:
                 has_gps=p.get("has_gps", False),
                 has_imu=p.get("has_imu", False),
                 has_calibration=p.get("has_calibration", False),
-                camera_model=p.get("camera_model", "DJI FC3411 (24mm)"),
-                camera_focal_mm=p.get("camera_focal_mm", 24.0),
-                latitude_deg=p.get("latitude_deg", 48.8566),
-                longitude_deg=p.get("longitude_deg", 2.3522),
-                altitude_m=p.get("altitude_m", 82.4),
-                flight_speed_mps=p.get("flight_speed_mps", 6.2)
+                camera_model=p.get("camera_model"),
+                camera_focal_mm=p.get("camera_focal_mm"),
+                latitude_deg=p.get("latitude_deg"),
+                longitude_deg=p.get("longitude_deg"),
+                altitude_m=p.get("altitude_m"),
+                flight_speed_mps=p.get("flight_speed_mps")
             ) for p in self._projects.values()
         ]
 

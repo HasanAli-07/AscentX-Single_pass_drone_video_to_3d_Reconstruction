@@ -123,16 +123,16 @@ export default function App() {
               <span className="stat-label text-slate-400 font-semibold">ACTIVE PROJECT METRICS</span>
               <Badge label={apiConnected ? "API ONLINE" : "STANDALONE"} variant={apiConnected ? "ok" : "warn"} />
             </div>
-            <StatRow label="Project Name" value={activeProject?.name || "scan_session_2024_11_08"} accent />
-            <StatRow label="Project ID" value={activeProject?.id || "PRJ-20241108-004A"} />
-            <StatRow label="Pipeline Status" value={activeProject?.status || "COMPLETED"} accent />
-            <StatRow label="Input Video" value={activeProject?.video_filename || "DJI_0042.MP4"} />
-            <StatRow label="Video Resolution" value={activeProject?.video_resolution || "3840×2160 (4K)"} />
-            <StatRow label="Camera Model" value={activeProject?.camera_model || "DJI FC3411 (24mm)"} />
-            <StatRow label="Extracted Frames" value={(activeProject?.total_frames || 7860).toLocaleString()} />
-            <StatRow label="Selected Keys" value={(activeProject?.selected_frames || 1240).toLocaleString()} accent />
-            <StatRow label="Sparse Points" value={`${(activeProject?.sparse_points || 184392).toLocaleString()} pts`} />
-            <StatRow label="Dense Cloud" value={`${((activeProject?.dense_points || 4200000) / 1000000).toFixed(1)}M pts`} accent />
+            <StatRow label="Project Name" value={activeProject?.name || "Unassigned"} accent />
+            <StatRow label="Project ID" value={activeProject?.id || "N/A"} />
+            <StatRow label="Pipeline Status" value={activeProject?.status || "CREATED"} accent />
+            <StatRow label="Input Video" value={activeProject?.video_filename || "Not Uploaded"} />
+            <StatRow label="Video Resolution" value={activeProject?.video_resolution || "N/A"} />
+            <StatRow label="Camera Model" value={activeProject?.camera_model || "N/A"} />
+            <StatRow label="Extracted Frames" value={(activeProject?.total_frames || 0).toLocaleString()} />
+            <StatRow label="Selected Keys" value={(activeProject?.selected_frames || 0).toLocaleString()} accent={!!activeProject?.selected_frames} />
+            <StatRow label="Sparse Points" value={`${(activeProject?.sparse_points || 0).toLocaleString()} pts`} />
+            <StatRow label="Dense Cloud" value={activeProject?.dense_points ? `${(activeProject.dense_points / 1000000).toFixed(1)}M pts` : "0 pts"} accent={!!activeProject?.dense_points} />
           </div>
 
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>

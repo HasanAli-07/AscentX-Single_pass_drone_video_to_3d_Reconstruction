@@ -258,18 +258,18 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
               VIDEO PROPERTIES
             </span>
             <div className="flex flex-col gap-2">
-              <StatRow label="File Name" value={project.video_filename || videoFile?.name || "DJI_0042.MP4"} accent />
-              <StatRow label="Resolution" value={project.video_resolution || "3840×2160 (4K)"} />
-              <StatRow label="Frame Rate" value={`${project.video_fps || 30} fps`} />
+              <StatRow label="File Name" value={project.video_filename || videoFile?.name || "No Video Loaded"} accent={!!project.video_filename} />
+              <StatRow label="Resolution" value={project.video_resolution || (project.video_filename ? "4K UHD" : "N/A")} />
+              <StatRow label="Frame Rate" value={project.video_fps ? `${project.video_fps} fps` : "N/A"} />
               <StatRow label="Duration" value={formatDuration(project.video_duration_sec)} />
-              <StatRow label="File Size" value={`${project.video_file_size_mb || 2800} MB`} />
-              <StatRow label="Codec" value={project.video_codec || "H.264 / AVC"} />
-              <StatRow label="Extracted Frames" value={(project.total_frames || 7860).toLocaleString()} accent />
+              <StatRow label="File Size" value={project.video_file_size_mb ? `${project.video_file_size_mb} MB` : "0 MB"} />
+              <StatRow label="Codec" value={project.video_codec || "N/A"} />
+              <StatRow label="Extracted Frames" value={(project.total_frames || 0).toLocaleString()} accent={project.total_frames > 0} />
             </div>
             <div className="mt-3 pt-2 border-t border-[#2a2b31]">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full py-1.5 rounded bg-[#18191d] text-slate-300 border border-[#2a2b31] hover:text-cyan-400 transition-colors text-center text-[10px]"
+                className="w-full py-1.5 rounded bg-[#18191d] text-slate-300 border border-[#2a2b31] hover:text-cyan-400 transition-colors text-center text-[10px] cursor-pointer"
               >
                 SELECT NEW VIDEO FILE
               </button>
@@ -283,7 +283,7 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
         <div className="flex items-center justify-between mb-3">
           <span className="stat-label text-slate-400 font-semibold">B. FLIGHT METADATA & TELEMETRY</span>
           <div className="flex items-center gap-2">
-            <Badge label={project.has_gps ? "✓ GPS ACTIVE" : "STANDARD GPS"} variant={project.has_gps ? "ok" : "warn"} />
+            <Badge label={project.has_gps ? "✓ GPS ACTIVE" : "AWAITING LOG"} variant={project.has_gps ? "ok" : "warn"} />
             <button
               onClick={() => metaInputRef.current?.click()}
               className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-[#2a2b31] text-[10px] hover:text-cyan-400 transition-colors cursor-pointer"
@@ -293,14 +293,14 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
           </div>
         </div>
         <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-          <StatRow label="GPS Status" value={project.has_gps ? "LOCK ACTIVE" : "DEFAULT FIX"} accent />
-          <StatRow label="Latitude" value={`${project.latitude_deg || 48.8566}° N`} />
-          <StatRow label="Longitude" value={`${project.longitude_deg || 2.3522}° E`} />
-          <StatRow label="Altitude" value={`${project.altitude_m || 82.4} m`} />
-          <StatRow label="Flight Speed" value={`${project.flight_speed_mps || 6.2} m/s`} />
-          <StatRow label="IMU Orientation" value={project.has_imu ? "Available (3-Axis)" : "Standard"} accent />
-          <StatRow label="RTK / PPK" value="RTK Fixed" accent />
-          <StatRow label="UTC Timestamp" value="09:31:08 UTC" />
+          <StatRow label="GPS Status" value={project.has_gps ? "LOCK ACTIVE" : "NO GPS LOG"} accent={project.has_gps} />
+          <StatRow label="Latitude" value={project.latitude_deg ? `${project.latitude_deg}° N` : "N/A"} />
+          <StatRow label="Longitude" value={project.longitude_deg ? `${project.longitude_deg}° E` : "N/A"} />
+          <StatRow label="Altitude" value={project.altitude_m ? `${project.altitude_m} m` : "N/A"} />
+          <StatRow label="Flight Speed" value={project.flight_speed_mps ? `${project.flight_speed_mps} m/s` : "N/A"} />
+          <StatRow label="IMU Orientation" value={project.has_imu ? "Available (3-Axis)" : "N/A"} accent={project.has_imu} />
+          <StatRow label="RTK / PPK" value={project.has_gps ? "RTK Fixed" : "N/A"} accent={project.has_gps} />
+          <StatRow label="UTC Timestamp" value={project.has_gps ? "09:31:08 UTC" : "N/A"} />
         </div>
       </div>
 
