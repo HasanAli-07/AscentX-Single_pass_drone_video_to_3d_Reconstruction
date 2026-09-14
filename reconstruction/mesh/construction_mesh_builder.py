@@ -194,6 +194,13 @@ class ConstructionMeshBuilder:
         tex_bytes_list = [primitives[0]["tex_bytes"], primitives[1]["tex_bytes"], primitives[3]["tex_bytes"], primitives[5]["tex_bytes"]]
         mat_names = ["GroundMaterial", "WoodFrameMaterial", "ConcreteMaterial", "RoofMaterial"]
 
+        base_colors = [
+            [0.25, 0.35, 0.20, 1.0],  # Ground (Greenish dirt)
+            [0.78, 0.52, 0.30, 1.0],  # Wood (Warm timber orange/brown)
+            [0.55, 0.58, 0.60, 1.0],  # Concrete (Grey masonry)
+            [0.85, 0.65, 0.45, 1.0],  # Roof deck (Light timber)
+        ]
+
         # Add image buffer views & images
         for i, t_bytes in enumerate(tex_bytes_list):
             offset = len(bin_chunks)
@@ -220,9 +227,10 @@ class ConstructionMeshBuilder:
             gltf_materials.append({
                 "name": mat_names[i],
                 "pbrMetallicRoughness": {
+                    "baseColorFactor": base_colors[i],
                     "baseColorTexture": {"index": tex_idx},
                     "metallicFactor": 0.1,
-                    "roughnessFactor": 0.7
+                    "roughnessFactor": 0.6
                 },
                 "doubleSided": True
             })

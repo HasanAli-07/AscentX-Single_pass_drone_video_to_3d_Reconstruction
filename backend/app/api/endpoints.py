@@ -257,14 +257,12 @@ def get_project_model_info(project_id: str):
                     v_path = proj_dir / f
                     break
 
-    if v_path and v_path.exists():
+    # Build GLB if missing or if it's the old 63MB Untitled.glb file
+    if not glb_path.exists() or os.path.getsize(glb_path) > 5 * 1024 * 1024:
         from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
         builder = ConstructionMeshBuilder(str(proj_dir))
-        builder.generate_project_glb(str(v_path), str(glb_path))
-    elif not glb_path.exists() and (SOURCE_DIR / "Untitled.glb").exists():
-        proj_dir.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.copy(SOURCE_DIR / "Untitled.glb", glb_path)
+        v_str = str(v_path) if (v_path and v_path.exists()) else ""
+        builder.generate_project_glb(v_str, str(glb_path))
         
     return {
         "project_id": project_id,
@@ -279,7 +277,7 @@ def get_project_model_info(project_id: str):
 def serve_project_file(project_id: str, filename: str):
     proj_dir = settings.STORAGE_DIR / project_id
     file_path = proj_dir / filename
-    if not file_path.exists():
+    if not file_path.exists() or (filename == "model.glb" and os.path.getsize(file_path) > 5 * 1024 * 1024):
         proj_dir.mkdir(parents=True, exist_ok=True)
         if filename == "model.glb":
             proj = project_service.get_project(project_id) or {}
@@ -291,13 +289,10 @@ def serve_project_file(project_id: str, filename: str):
                         if f.lower().endswith(".mp4"):
                             v_path = proj_dir / f
                             break
-            if v_path and v_path.exists():
-                from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
-                builder = ConstructionMeshBuilder(str(proj_dir))
-                builder.generate_project_glb(str(v_path), str(file_path))
-            elif (SOURCE_DIR / "Untitled.glb").exists():
-                import shutil
-                shutil.copy(SOURCE_DIR / "Untitled.glb", file_path)
+            from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
+            builder = ConstructionMeshBuilder(str(proj_dir))
+            v_str = str(v_path) if (v_path and v_path.exists()) else ""
+            builder.generate_project_glb(v_str, str(file_path))
         elif filename == "model.obj":
             from reconstruction.mesh.processor import MeshProcessorService
             MeshProcessorService(str(proj_dir)).generate_demo_mesh(str(file_path))

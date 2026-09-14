@@ -30,7 +30,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
   const [loadingModel, setLoadingModel] = useState<boolean>(false);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [modelColor, setModelColor] = useState<string>("#00c8d4");
-  const [useOriginalMaterials, setUseOriginalMaterials] = useState<boolean>(true);
+  const [useOriginalMaterials, setUseOriginalMaterials] = useState<boolean>(false);
   const [wireframe, setWireframe] = useState<boolean>(false);
   const [doubleSided, setDoubleSided] = useState<boolean>(true);
   const [modelScale, setModelScale] = useState<number>(1.0);
@@ -529,9 +529,16 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
         } else if (useOriginalMaterials && orig) {
           mesh.material = orig;
           if (Array.isArray(mesh.material)) {
-            mesh.material.forEach((m) => (m.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide));
+            mesh.material.forEach((m: any) => {
+              m.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+              m.wireframe = wireframe;
+              m.needsUpdate = true;
+            });
           } else {
-            mesh.material.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+            const m: any = mesh.material;
+            m.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+            m.wireframe = wireframe;
+            m.needsUpdate = true;
           }
         } else if (isUltraLow) {
           mesh.material = new THREE.MeshBasicMaterial({
