@@ -3,17 +3,18 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { DisplayMode, ViewToggle } from "../types";
-import { fetchSourceModels, SourceModelInfo } from "../services/api";
+import { DisplayMode, ViewToggle, Project } from "../types";
+import { fetchSourceModels, fetchProjectModelInfo, SourceModelInfo } from "../services/api";
 
 interface ThreeGLBViewerProps {
   displayMode: DisplayMode;
   activeToggles: Set<ViewToggle>;
+  activeProject?: Project | null;
 }
 
 export type QualityPreset = "ULTRA_LOW" | "LOW" | "BALANCED" | "HIGH";
 
-export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerProps) {
+export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: ThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -23,7 +24,8 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
 
   const [sourceModels, setSourceModels] = useState<SourceModelInfo[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("Untitled.glb");
+  const [selectedModelUrl, setSelectedModelUrl] = useState<string>("");
+  const [selectedModelName, setSelectedModelName] = useState<string>("Reconstructed 3D Scan");
   const [loadingModel, setLoadingModel] = useState<boolean>(false);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [modelColor, setModelColor] = useState<string>("#00c8d4");
@@ -33,21 +35,34 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
   const [modelScale, setModelScale] = useState<number>(1.0);
   const [rotationSpeed, setRotationSpeed] = useState<number>(0);
   const [showControlsPanel, setShowControlsPanel] = useState<boolean>(true);
-  const [qualityPreset, setQualityPreset] = useState<QualityPreset>("LOW"); // Default to LOW for instant 60 FPS on low-config devices
+  const [qualityPreset, setQualityPreset] = useState<QualityPreset>("LOW");
   const [currentFps, setCurrentFps] = useState<number>(60);
   const [webglContextLost, setWebglContextLost] = useState<boolean>(false);
   const [modelStats, setModelStats] = useState<{ meshes: number; vertices: number; faces: number } | null>(null);
   const [maxTextureSize, setMaxTextureSize] = useState<number>(4096);
   const [autoFpsOptimize, setAutoFpsOptimize] = useState<boolean>(true);
-  const [renderingThrottled, setRenderingThrottled] = useState<boolean>(false);
 
-  // Fetch available source models
+  // Fetch available models prioritizing current active project's reconstructed video model
   useEffect(() => {
-    fetchSourceModels().then((models) => {
-      setSourceModels(models);
-      if (models.length > 0) setSelectedModel(models[0].filename);
-    });
-  }, []);
+    async function loadModels() {
+      const baseModels = await fetchSourceModels();
+      let modelList: SourceModelInfo[] = [];
+
+      if (activeProject) {
+        const projModel = await fetchProjectModelInfo(activeProject.id, activeProject.name);
+        modelList.push(projModel);
+      }
+
+      modelList = [...modelList, ...baseModels];
+      setSourceModels(modelList);
+
+      if (modelList.length > 0) {
+        setSelectedModelUrl(modelList[0].download_url);
+        setSelectedModelName(modelList[0].name);
+      }
+    }
+    loadModels();
+  }, [activeProject?.id, activeProject?.name, activeProject?.status]);
 
   // Dispose unneeded geometries, textures, materials to prevent VRAM memory leaks
   const disposeHierarchy = (object: THREE.Object3D) => {
@@ -101,7 +116,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     });
   };
 
-  // Initialize Three.js Scene, Camera, Lights, Renderer ONCE on mount with WebGL Context Loss Recovery
+  // Initialize Three.js Scene, Camera, Lights, Renderer ONCE on mount
   useEffect(() => {
     if (!containerRef.current) return;
     const width = containerRef.current.clientWidth || 800;
@@ -263,7 +278,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         containerRef.current.removeChild(renderer.domElement);
       }
     };
-  }, []); // Mount ONCE to prevent WebGL Context teardown
+  }, []);
 
   // Apply Quality Preset Updates Dynamically Without Re-creating WebGL Context
   useEffect(() => {
@@ -294,6 +309,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
   const fitCameraToModel = (object: THREE.Object3D) => {
     if (!cameraRef.current || !controlsRef.current) return;
 
+    object.updateMatrixWorld(true);
     const bbox = new THREE.Box3().setFromObject(object);
     if (bbox.isEmpty()) return;
 
@@ -314,9 +330,9 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
     controlsRef.current.update();
   };
 
-  // Load 3D GLB / GLTF Model with DRACO + WebWorker ArrayBuffer Optimization
+  // Load 3D GLB / GLTF Model with DRACO Optimization
   useEffect(() => {
-    if (!sceneRef.current || !selectedModel) return;
+    if (!sceneRef.current || !selectedModelUrl) return;
 
     setLoadingModel(true);
     setLoadProgress(15);
@@ -329,9 +345,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
       loadedModelRef.current = null;
     }
 
-    const modelUrl = `http://localhost:8000/api/v1/source-models/${selectedModel}`;
-
-    fetch(modelUrl)
+    fetch(selectedModelUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.arrayBuffer();
@@ -401,12 +415,12 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
             });
 
             // Center model on ground level grid
+            model.updateMatrixWorld(true);
             const bbox = new THREE.Box3().setFromObject(model);
             const center = bbox.getCenter(new THREE.Vector3());
 
-            model.position.x = -center.x;
-            model.position.z = -center.z;
-            model.position.y = -bbox.min.y;
+            model.position.set(-center.x, -bbox.min.y, -center.z);
+            model.updateMatrixWorld(true);
 
             loadedModelRef.current = model;
             sceneRef.current?.add(model);
@@ -422,7 +436,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         );
       })
       .catch((err) => {
-        console.warn("Using optimized procedural 3D model fallback:", err);
+        console.warn("Using procedural 3D model fallback:", err);
 
         const group = new THREE.Group();
         const mat = new THREE.MeshLambertMaterial({
@@ -446,7 +460,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         setLoadingModel(false);
         setLoadProgress(100);
       });
-  }, [selectedModel]);
+  }, [selectedModelUrl]);
 
   // Update Scale
   useEffect(() => {
@@ -484,19 +498,16 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
             mesh.material.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
           }
         } else if (isUltraLow) {
-          // MeshBasicMaterial eliminates all fragment lighting calculations for maximum FPS on low hardware
           mesh.material = new THREE.MeshBasicMaterial({
             color: new THREE.Color(modelColor),
             side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
           });
         } else if (isLow) {
-          // Gouraud/Gouraud-like vertex lighting without per-pixel PBR specularity
           mesh.material = new THREE.MeshLambertMaterial({
             color: new THREE.Color(modelColor),
             side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
           });
         } else {
-          // Full PBR Shader for high-spec GPUs
           mesh.material = new THREE.MeshStandardMaterial({
             color: new THREE.Color(modelColor),
             side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
@@ -557,21 +568,27 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0e11]/90 z-20">
           <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3" />
           <span className="text-cyan-400 text-xs font-mono font-semibold">OPTIMIZING & LOADING 3D MODEL ({loadProgress}%)...</span>
-          <span className="text-slate-400 text-[10px] font-mono mt-1">{selectedModel} (DRACO Compression Buffer)</span>
+          <span className="text-slate-400 text-[10px] font-mono mt-1">{selectedModelName}</span>
         </div>
       )}
 
       {/* Top Left Model Selector & Performance Meter */}
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
         <div className="flex items-center gap-2 p-1.5 rounded bg-[#18191d]/90 border border-[#2a2b31] backdrop-blur shadow-lg">
-          <span className="text-[10px] font-mono text-slate-400">SOURCE MODEL:</span>
+          <span className="text-[10px] font-mono text-slate-400">ACTIVE 3D MODEL:</span>
           <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="bg-[#131418] text-cyan-400 text-xs font-mono px-2 py-1 rounded border border-[#2a2b31] outline-none cursor-pointer"
+            value={selectedModelUrl}
+            onChange={(e) => {
+              const chosen = sourceModels.find((m) => m.download_url === e.target.value);
+              if (chosen) {
+                setSelectedModelUrl(chosen.download_url);
+                setSelectedModelName(chosen.name);
+              }
+            }}
+            className="bg-[#131418] text-cyan-400 text-xs font-mono px-2 py-1 rounded border border-[#2a2b31] outline-none cursor-pointer max-w-xs truncate"
           >
             {sourceModels.map((m) => (
-              <option key={m.filename} value={m.filename}>
+              <option key={m.download_url} value={m.download_url}>
                 {m.name} ({m.size_mb} MB)
               </option>
             ))}
@@ -587,6 +604,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
 
         {/* Real-time FPS & Model Statistics Badge */}
         <div className="flex items-center gap-3 px-2.5 py-1 rounded bg-[#18191d]/90 border border-[#2a2b31] text-[9px] font-mono text-slate-400 backdrop-blur w-fit shadow-md">
+          <span className="text-cyan-400 font-bold">{selectedModelName}</span>
           <span>FPS: <strong className={currentFps < 30 ? "text-amber-400 font-bold" : "text-emerald-400"}>{currentFps}</strong></span>
           {modelStats && (
             <>
@@ -628,7 +646,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles }: ThreeGLBViewerPro
                         : "bg-[#131418] text-slate-400 border-[#2a2b31] hover:text-slate-200"
                     }`}
                   >
-                    {q === "ULTRA_LOW" ? "⚡ ULTRA LOW" : q === "LOW" ? "🔋 LOW GPU" : q === "BALANCED" ? "⚖️ BALANCED" : "✨ HIGH PBR"}
+                    {q === "ULTRA_LOW" ? "⚡ ULTRA LOW" : q === "LOW" ? "🔋 LOW GPU" : q === "BALANCED" ? "秤 BALANCED" : "✨ HIGH PBR"}
                   </button>
                 ))}
               </div>

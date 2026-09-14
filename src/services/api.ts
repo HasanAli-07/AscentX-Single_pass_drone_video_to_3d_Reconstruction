@@ -40,6 +40,30 @@ export async function fetchSourceModels(): Promise<SourceModelInfo[]> {
   return defaultModels;
 }
 
+export async function fetchProjectModelInfo(projectId: string, projectName: string): Promise<SourceModelInfo> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/model-info`);
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        filename: data.filename,
+        name: `🎯 Reconstructed 3D Scan (${projectName})`,
+        size_mb: data.size_mb,
+        download_url: `${API_BASE_URL}/projects/${projectId}/files/${data.filename}`,
+      };
+    }
+  } catch (e) {
+    console.warn("Project model info offline fallback");
+  }
+  return {
+    filename: "model.glb",
+    name: `🎯 Reconstructed 3D Scan (${projectName})`,
+    size_mb: 60.36,
+    download_url: `${API_BASE_URL}/projects/${projectId}/files/model.glb`,
+  };
+}
+
+
 export async function fetchProjects(): Promise<Project[]> {
   try {
     const res = await fetch(`${API_BASE_URL}/projects`);

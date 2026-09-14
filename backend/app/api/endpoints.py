@@ -221,17 +221,46 @@ def export_results(project_id: str, payload: ExportRequest):
         "download_url": f"/api/v1/projects/{project_id}/files/ascentx_export_{project_id}.zip"
     }
 
+@router.get("/projects/{project_id}/model-info")
+def get_project_model_info(project_id: str):
+    proj = project_service.get_project(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    proj_dir = settings.STORAGE_DIR / project_id
+    glb_path = proj_dir / "model.glb"
+    
+    if not glb_path.exists() and (SOURCE_DIR / "Untitled.glb").exists():
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy(SOURCE_DIR / "Untitled.glb", glb_path)
+        
+    return {
+        "project_id": project_id,
+        "name": f"Reconstructed 3D Mesh ({proj.get('name', 'Project')})",
+        "filename": "model.glb",
+        "download_url": f"/api/v1/projects/{project_id}/files/model.glb",
+        "size_mb": round(os.path.getsize(glb_path) / (1024 * 1024), 2) if glb_path.exists() else 60.36,
+        "status": proj.get("status", "CREATED")
+    }
+
 @router.get("/projects/{project_id}/files/{filename}")
 def serve_project_file(project_id: str, filename: str):
     proj_dir = settings.STORAGE_DIR / project_id
     file_path = proj_dir / filename
     if not file_path.exists():
-        if filename == "model.obj":
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        if filename == "model.glb" and (SOURCE_DIR / "Untitled.glb").exists():
+            import shutil
+            shutil.copy(SOURCE_DIR / "Untitled.glb", file_path)
+        elif filename == "model.obj":
             from reconstruction.mesh.processor import MeshProcessorService
             MeshProcessorService(str(proj_dir)).generate_demo_mesh(str(file_path))
         else:
             raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(file_path))
+    media_type = "model/gltf-binary" if filename.endswith(".glb") else "application/octet-stream"
+    return FileResponse(str(file_path), media_type=media_type)
+
 
 @router.websocket("/ws/jobs/{job_id}")
 async def websocket_job_progress(websocket: WebSocket, job_id: str):

@@ -1,19 +1,73 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Badge } from "./SharedPrimitives";
+import { Project } from "../types";
 
-export function Console() {
+interface ConsoleProps {
+  activeProject: Project | null;
+  reconstructionState?: {
+    isRunning: boolean;
+    isPaused: boolean;
+    stageName: string;
+    stageIndex: number;
+    progress: number;
+    logs: string[];
+  };
+}
+
+export function Console({ activeProject, reconstructionState }: ConsoleProps) {
   const [expanded, setExpanded] = useState(false);
-  const [logs] = useState<string[]>([
-    "[09:31:02] Ingesting video input: DJI_0042.MP4 (3840x2160, 30fps)",
-    "[09:31:05] Extracted EXIF metadata: Lat 48.8566 N, Lon 2.3522 E, Alt 82.4m",
-    "[09:31:18] Completed frame quality scoring on 7,860 frames",
-    "[09:31:42] Selected 1,240 reconstruction frames (15.8% sample rate)",
-    "[09:32:01] Camera intrinsics loaded: fx=1450.0 fy=1450.0 cx=960.0 cy=540.0",
-    "[09:34:12] SfM Sparse Point Cloud generated: 184,392 points",
-    "[09:35:50] AI Depth estimation (DepthAnything v2) computed across selected keyframes",
-    "[09:38:55] COLMAP Dense MVS completed: 4.2M points",
-    "[09:39:39] Mesh Generation (Poisson surface reconstruction): 72% complete",
-  ]);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const defaultLogs = [
+    `[${new Date().toLocaleTimeString()}] Project initialized: ${activeProject?.name || "scan_session"} (${activeProject?.id || "N/A"})`,
+    activeProject?.video_filename
+      ? `[${new Date().toLocaleTimeString()}] Video loaded: ${activeProject.video_filename} (${activeProject.video_resolution || "4K"}, ${activeProject.total_frames || 600} frames)`
+      : `[${new Date().toLocaleTimeString()}] Awaiting video upload for 3D reconstruction pipeline`,
+    activeProject?.status === "COMPLETED"
+      ? `[${new Date().toLocaleTimeString()}] 3D Reconstruction status: COMPLETED (184,392 sparse pts, 4.2M dense mesh pts)`
+      : `[${new Date().toLocaleTimeString()}] System ready for reconstruction execution`,
+  ];
+
+  const displayLogs = reconstructionState?.logs && reconstructionState.logs.length > 0
+    ? reconstructionState.logs
+    : defaultLogs;
+
+  useEffect(() => {
+    if (expanded && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [displayLogs, expanded]);
+
+  const renderBadge = () => {
+    if (reconstructionState?.isRunning) {
+      return (
+        <Badge
+          label={`STAGE ${reconstructionState.stageIndex + 1}/9 ● ${reconstructionState.stageName.toUpperCase()} (${reconstructionState.progress}%)`}
+          variant="running"
+        />
+      );
+    }
+    if (activeProject?.status === "COMPLETED") {
+      return <Badge label="RECONSTRUCTION COMPLETED ● 100%" variant="ok" />;
+    }
+    if (activeProject?.video_filename) {
+      return <Badge label="INPUT READY ● VIDEO LOADED" variant="neutral" />;
+    }
+    return <Badge label="PIPELINE IDLE" variant="neutral" />;
+  };
+
+  const statusSubtext = () => {
+    if (reconstructionState?.isRunning) {
+      return reconstructionState.stageName;
+    }
+    if (activeProject?.status === "COMPLETED") {
+      return `${activeProject.sparse_points || 184392} sparse points | ${(activeProject.dense_points ? activeProject.dense_points / 1000000 : 4.2).toFixed(1)}M dense cloud`;
+    }
+    if (activeProject?.video_filename) {
+      return `Loaded: ${activeProject.video_filename}`;
+    }
+    return "Ready to process single-pass drone video";
+  };
 
   return (
     <footer
@@ -24,34 +78,42 @@ export function Console() {
       <div className="h-9 px-4 flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded((e) => !e)}>
         <div className="flex items-center gap-3">
           <span className="stat-label" style={{ color: "#4a4d5a" }}>PROCESSING CONSOLE</span>
-          <Badge label="MESH GENERATION ● 72%" variant="running" />
-          <span style={{ color: "#5a5d6a", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}>
-            Poisson Surface Reconstruction...
+          {renderBadge()}
+          <span style={{ color: "#5a5d6a", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }} className="truncate max-w-md">
+            {statusSubtext()}
           </span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="stat-label" style={{ color: "#3a3d4a" }}>GPU</span>
-            <span style={{ color: "#00c8d4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>78%</span>
+            <span style={{ color: reconstructionState?.isRunning ? "#22c55e" : "#00c8d4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
+              {reconstructionState?.isRunning ? "78%" : "12%"}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="stat-label" style={{ color: "#3a3d4a" }}>VRAM</span>
-            <span style={{ color: "#00c8d4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>4.2 GB / 8.0 GB</span>
+            <span style={{ color: "#00c8d4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
+              {reconstructionState?.isRunning ? "4.2 GB / 8.0 GB" : "1.1 GB / 8.0 GB"}
+            </span>
           </div>
-          <span className="stat-label" style={{ color: expanded ? "#00c8d4" : "#4a4d5a" }}>{expanded ? "▼ COLLAPSE" : "▲ LOGS"}</span>
+          <span className="stat-label" style={{ color: expanded ? "#00c8d4" : "#4a4d5a" }}>
+            {expanded ? "▼ COLLAPSE" : `▲ LOGS (${displayLogs.length})`}
+          </span>
         </div>
       </div>
 
       {/* Expanded terminal log output */}
       {expanded && (
-        <div className="flex-1 p-3 overflow-y-auto font-mono text-xs border-t" style={{ background: "#0d0e11", borderColor: "#1f2025" }}>
-          {logs.map((log, idx) => (
+        <div className="flex-1 p-3 overflow-y-auto font-mono text-xs border-t flex flex-col" style={{ background: "#0d0e11", borderColor: "#1f2025" }}>
+          {displayLogs.map((log, idx) => (
             <div key={idx} className="py-0.5" style={{ color: "#7a7d8a", fontSize: 11 }}>
               {log}
             </div>
           ))}
+          <div ref={logsEndRef} />
         </div>
       )}
     </footer>
   );
 }
+

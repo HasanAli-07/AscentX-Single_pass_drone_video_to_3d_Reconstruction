@@ -1,15 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Project } from "../types";
 import { Badge, Btn } from "../components/SharedPrimitives";
 import { startReconstructionJob, updateProjectDetails } from "../services/api";
+
+export interface ReconstructionState {
+  isRunning: boolean;
+  isPaused: boolean;
+  stageName: string;
+  stageIndex: number;
+  progress: number;
+  logs: string[];
+}
 
 interface ReconstructionWorkspaceProps {
   project: Project | null;
   onUpdateProject?: (updated: Project) => void;
   onNavigate?: (section: any) => void;
+  autoStartTrigger?: number;
+  onStateChange?: (state: ReconstructionState) => void;
 }
 
-export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }: ReconstructionWorkspaceProps) {
+export function ReconstructionWorkspace({
+  project,
+  onUpdateProject,
+  onNavigate,
+  autoStartTrigger,
+  onStateChange,
+}: ReconstructionWorkspaceProps) {
   const isCompleted = project?.status === "COMPLETED";
 
   const [activeStageIdx, setActiveStageIdx] = useState<number>(0);
@@ -17,24 +34,12 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [completedStages, setCompletedStages] = useState<Set<number>>(new Set());
   const [stageProgress, setStageProgress] = useState<number>(0);
-
-  // Sync completion state with project status
-  useEffect(() => {
-    if (project?.status === "COMPLETED") {
-      setCompletedStages(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]));
-      setActiveStageIdx(8);
-      setStageProgress(100);
-    } else if (!isRunning) {
-      setCompletedStages(new Set());
-      setActiveStageIdx(0);
-      setStageProgress(0);
-    }
-  }, [project?.id, project?.status]);
+  const [logs, setLogs] = useState<string[]>([]);
 
   const stagesDef = [
-    { name: "Frame Processing & Decoding", time: "00:18", gpu: 0, defaultOutput: `${(project?.total_frames || 600).toLocaleString()} frames decoded` },
-    { name: "Camera Calibration & Intrinsics", time: "00:42", gpu: 0, defaultOutput: `Focal length ${project?.camera_focal_mm || 24}mm` },
-    { name: "SfM Sparse Reconstruction", time: "02:11", gpu: 34, defaultOutput: `${(project?.sparse_points || 184392).toLocaleString()} sparse points` },
+    { name: "Frame Processing & Decoding", time: "00:18", gpu: 42, defaultOutput: `${(project?.total_frames || 600).toLocaleString()} frames decoded` },
+    { name: "Camera Calibration & Intrinsics", time: "00:42", gpu: 30, defaultOutput: `Focal length ${project?.camera_focal_mm || 24}mm` },
+    { name: "SfM Sparse Reconstruction", time: "02:11", gpu: 68, defaultOutput: `${(project?.sparse_points || 184392).toLocaleString()} sparse points` },
     { name: "AI Neural Depth Estimation", time: "01:38", gpu: 92, defaultOutput: "DepthAnything v2 Neural Engine" },
     { name: "Dense MVS Surface Matching", time: "03:05", gpu: 87, defaultOutput: "Multi-View Stereo matching" },
     { name: "Dense Point Cloud Generation", time: "01:22", gpu: 65, defaultOutput: `${(project?.dense_points || 4200000).toLocaleString()} dense points` },
@@ -42,6 +47,63 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
     { name: "UV Texture Atlas Generation", time: "00:20", gpu: 45, defaultOutput: "4096×4096 UV Map" },
     { name: "Georeferencing Spatial Alignment", time: "00:12", gpu: 10, defaultOutput: project?.coordinate_system || "WGS84 / UTM Zone 33N" },
   ];
+
+  const pushLog = useCallback((msg: string) => {
+    const timeStr = new Date().toLocaleTimeString();
+    const logLine = `[${timeStr}] ${msg}`;
+    setLogs((prev) => [...prev, logLine]);
+  }, []);
+
+  const handleStart = useCallback(async () => {
+    if (!project) return;
+    setCompletedStages(new Set());
+    setActiveStageIdx(0);
+    setStageProgress(0);
+    setIsRunning(true);
+    setIsPaused(false);
+
+    const initialLogs = [
+      `[${new Date().toLocaleTimeString()}] Starting 3D Reconstruction Pipeline for project ${project.name} (${project.id})...`,
+      `[${new Date().toLocaleTimeString()}] Input Video: ${project.video_filename || "Uploaded Drone Flight"} | Resolution: ${project.video_resolution || "4K"}`,
+    ];
+    setLogs(initialLogs);
+
+    if (onUpdateProject) {
+      onUpdateProject({ ...project, status: "RECONSTRUCTING" });
+    }
+
+    await startReconstructionJob(project.id);
+  }, [project, onUpdateProject]);
+
+  // Handle auto-start trigger from quick controls
+  useEffect(() => {
+    if (autoStartTrigger && autoStartTrigger > 0 && !isRunning) {
+      handleStart();
+    }
+  }, [autoStartTrigger, handleStart, isRunning]);
+
+  // Initial stage completion sync
+  useEffect(() => {
+    if (project?.status === "COMPLETED" && !isRunning && completedStages.size === 0) {
+      setCompletedStages(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]));
+      setActiveStageIdx(8);
+      setStageProgress(100);
+    }
+  }, [project?.id, project?.status, isRunning, completedStages.size]);
+
+  // Notify parent of state changes for Console & Header sync
+  useEffect(() => {
+    if (onStateChange) {
+      onStateChange({
+        isRunning,
+        isPaused,
+        stageName: stagesDef[activeStageIdx]?.name || "Processing",
+        stageIndex: activeStageIdx,
+        progress: stageProgress,
+        logs,
+      });
+    }
+  }, [isRunning, isPaused, activeStageIdx, stageProgress, logs, onStateChange]);
 
   // Pipeline simulation step timer
   useEffect(() => {
@@ -57,11 +119,22 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
           });
 
           if (activeStageIdx < stagesDef.length - 1) {
-            setActiveStageIdx((idx) => idx + 1);
+            const nextIdx = activeStageIdx + 1;
+            setActiveStageIdx(nextIdx);
+
+            // Log stage progression
+            const stageLogs = [
+              `Completed Stage ${activeStageIdx + 1}: ${stagesDef[activeStageIdx].name}`,
+              `Starting Stage ${nextIdx + 1}: ${stagesDef[nextIdx].name} (${stagesDef[nextIdx].defaultOutput})`,
+            ];
+            stageLogs.forEach((l) => pushLog(l));
+
             return 0;
           } else {
             // All 9 stages complete!
             setIsRunning(false);
+            pushLog("🎉 3D Reconstruction Pipeline execution finished successfully! 3D Model ready for visualizer.");
+            
             if (project) {
               const updated: Project = {
                 ...project,
@@ -75,35 +148,27 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
             return 100;
           }
         }
-        return prev + 25; // Advances step progress cleanly
+        return prev + 25;
       });
-    }, 350);
+    }, 400);
 
     return () => clearInterval(interval);
-  }, [isRunning, isPaused, activeStageIdx, project, onUpdateProject]);
+  }, [isRunning, isPaused, activeStageIdx, project, onUpdateProject, pushLog]);
 
-  const handleStart = async () => {
-    if (!project) return;
-    setCompletedStages(new Set());
-    setActiveStageIdx(0);
-    setStageProgress(0);
-    setIsRunning(true);
-    setIsPaused(false);
-
-    if (onUpdateProject) {
-      onUpdateProject({ ...project, status: "RECONSTRUCTING" });
-    }
-
-    await startReconstructionJob(project.id);
+  const handlePause = () => {
+    setIsPaused(true);
+    pushLog(`Paused reconstruction pipeline at Stage ${activeStageIdx + 1} (${stagesDef[activeStageIdx].name})`);
   };
-
-  const handlePause = () => setIsPaused(true);
-  const handleResume = () => setIsPaused(false);
+  const handleResume = () => {
+    setIsPaused(false);
+    pushLog(`Resumed reconstruction pipeline execution`);
+  };
   const handleCancel = () => {
     setIsRunning(false);
     setIsPaused(false);
     setCompletedStages(new Set());
     setStageProgress(0);
+    pushLog(`Cancelled reconstruction pipeline execution`);
     if (project && onUpdateProject) {
       onUpdateProject({ ...project, status: "VALIDATED" });
     }
@@ -116,12 +181,12 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
       {/* Header controls & Status */}
       <div className="flex items-center justify-between bg-[#18191d] p-3 rounded-lg border border-[#2a2b31]">
         <div className="flex items-center gap-2">
-          {!isRunning && !isAllDone && (
+          {!isRunning && (
             <button
               onClick={handleStart}
-              className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-bold hover:bg-cyan-500/30 transition-colors cursor-pointer flex items-center gap-1.5"
+              className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-bold hover:bg-cyan-500/30 transition-colors cursor-pointer flex items-center gap-1.5 shadow-md"
             >
-              ▶ START RECONSTRUCTION PIPELINE
+              {isAllDone ? "🔄 RE-RUN RECONSTRUCTION PIPELINE" : "▶ START RECONSTRUCTION PIPELINE"}
             </button>
           )}
           {isRunning && !isPaused && (
@@ -133,19 +198,16 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
           {isRunning && (
             <Btn label="✖ CANCEL" variant="danger" onClick={handleCancel} />
           )}
-          {isAllDone && (
-            <Btn label="🔄 RE-RUN RECONSTRUCTION" variant="secondary" onClick={handleStart} />
-          )}
         </div>
 
         <div className="flex items-center gap-3">
           <div className="text-slate-400 text-xs font-semibold">
-            PROJECT: <span className="text-cyan-400">{project?.name || "scan_session_2024_11_08"}</span> ({project?.id})
+            PROJECT: <span className="text-cyan-400">{project?.name || "scan_session"}</span> ({project?.id || "N/A"})
           </div>
           {isAllDone && onNavigate && (
             <button
               onClick={() => onNavigate("visualization")}
-              className="px-4 py-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 animate-pulse"
+              className="px-4 py-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 animate-pulse shadow-md"
             >
               🎯 VIEW RECONSTRUCTED 3D MODEL ➔
             </button>
@@ -154,8 +216,8 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
       </div>
 
       {/* Completion Banner */}
-      {isAllDone && (
-        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between">
+      {isAllDone && !isRunning && (
+        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-2">
             <span className="text-emerald-400 text-sm font-bold">🎉 3D RECONSTRUCTION COMPLETE!</span>
             <span className="text-slate-300 text-xs">Sparse Cloud: 184,392 pts | Dense Mesh: 4,200,000 pts</span>
@@ -176,14 +238,14 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
         <div className="px-3 py-2 border-b border-[#1f2025] flex justify-between items-center bg-[#131418]">
           <span className="stat-label text-slate-400 font-semibold">SINGLE-PASS RECONSTRUCTION STAGE EXECUTION</span>
           <Badge
-            label={isAllDone ? "COMPLETED" : isRunning ? (isPaused ? "PAUSED" : "RUNNING") : "READY TO START"}
-            variant={isAllDone ? "ok" : isRunning ? "running" : "neutral"}
+            label={isRunning ? (isPaused ? "PAUSED" : `RUNNING - STAGE ${activeStageIdx + 1}/9`) : isAllDone ? "COMPLETED" : "READY TO START"}
+            variant={isRunning ? "running" : isAllDone ? "ok" : "neutral"}
           />
         </div>
 
         {stagesDef.map((s, i) => {
-          const isDone = completedStages.has(i) || isAllDone;
-          const isCurrent = isRunning && activeStageIdx === i && !isAllDone;
+          const isDone = completedStages.has(i) || (isAllDone && !isRunning);
+          const isCurrent = isRunning && activeStageIdx === i;
           const isQueued = !isDone && !isCurrent;
           const currentPct = isDone ? 100 : isCurrent ? stageProgress : 0;
 
@@ -248,3 +310,4 @@ export function ReconstructionWorkspace({ project, onUpdateProject, onNavigate }
     </div>
   );
 }
+

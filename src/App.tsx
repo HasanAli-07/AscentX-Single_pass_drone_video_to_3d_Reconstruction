@@ -10,7 +10,7 @@ import { fetchHealth, fetchProjects, createProject } from "./services/api";
 import { ProjectWorkspace } from "./pages/ProjectWorkspace";
 import { InputWorkspace } from "./pages/InputWorkspace";
 import { FrameWorkspace } from "./pages/FrameWorkspace";
-import { ReconstructionWorkspace } from "./pages/ReconstructionWorkspace";
+import { ReconstructionWorkspace, ReconstructionState } from "./pages/ReconstructionWorkspace";
 import { GeorefWorkspace } from "./pages/GeorefWorkspace";
 import { ExportWorkspace } from "./pages/ExportWorkspace";
 
@@ -23,6 +23,15 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [apiConnected, setApiConnected] = useState<boolean>(false);
+  const [autoStartTrigger, setAutoStartTrigger] = useState<number>(0);
+  const [reconstructionState, setReconstructionState] = useState<ReconstructionState>({
+    isRunning: false,
+    isPaused: false,
+    stageName: "",
+    stageIndex: 0,
+    progress: 0,
+    logs: [],
+  });
 
   useEffect(() => {
     fetchHealth().then((res) => {
@@ -56,6 +65,11 @@ export default function App() {
     setActiveSection("input");
   };
 
+  const handleStartReconstructionFromQuickControls = () => {
+    setActiveSection("reconstruction");
+    setAutoStartTrigger(Date.now());
+  };
+
   const renderActiveWorkspace = () => {
     switch (activeSection) {
       case "project":
@@ -82,6 +96,8 @@ export default function App() {
             project={activeProject}
             onUpdateProject={handleUpdateActiveProject}
             onNavigate={setActiveSection}
+            autoStartTrigger={autoStartTrigger}
+            onStateChange={setReconstructionState}
           />
         );
       case "georef":
@@ -93,7 +109,8 @@ export default function App() {
       case "measurements":
       case "reports":
       default:
-        return <ThreeGLBViewer displayMode={displayMode} activeToggles={activeToggles} />;
+        return <ThreeGLBViewer displayMode={displayMode} activeToggles={activeToggles} activeProject={activeProject} />;
+
     }
   };
 
@@ -147,7 +164,7 @@ export default function App() {
               <Btn label="01 EDIT PROJECT DETAILS" variant="secondary" onClick={() => setActiveSection("project")} />
               <Btn label="02 UPLOAD DRONE VIDEO" variant="primary" onClick={() => setActiveSection("input")} />
               <Btn label="03 RUN FRAME SELECTION" variant="secondary" onClick={() => setActiveSection("frames")} />
-              <Btn label="04 START RECONSTRUCTION" variant="secondary" onClick={() => setActiveSection("reconstruction")} />
+              <Btn label="04 START RECONSTRUCTION" variant="primary" onClick={handleStartReconstructionFromQuickControls} />
               <Btn label="06 GEOREFERENCING" variant="ghost" onClick={() => setActiveSection("georef")} />
               <Btn label="07 VIEW 3D CUSTOMIZER" variant="secondary" onClick={() => setActiveSection("visualization")} />
             </div>
@@ -178,7 +195,8 @@ export default function App() {
       </div>
 
       {/* Bottom Processing Console */}
-      <Console />
+      <Console activeProject={activeProject} reconstructionState={reconstructionState} />
     </div>
   );
 }
+
