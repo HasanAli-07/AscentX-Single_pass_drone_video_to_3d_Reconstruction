@@ -127,9 +127,9 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     scene.background = new THREE.Color("#0d0e11");
     sceneRef.current = scene;
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 5000);
-    camera.position.set(40, 30, 50);
+    // Camera with ultra-wide frustum clipping planes
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 500000);
+    camera.position.set(50, 40, 60);
     cameraRef.current = camera;
 
     // Create WebGL Renderer ONCE
@@ -179,26 +179,30 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     canvas.addEventListener("webglcontextlost", handleContextLost, false);
     canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
 
-    // Orbit Controls
+    // Orbit Controls with expanded distance range
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.maxDistance = 3000;
-    controls.minDistance = 0.2;
+    controls.maxDistance = 200000;
+    controls.minDistance = 0.1;
     controlsRef.current = controls;
 
-    // Dynamic Lighting Setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+    // Multi-Directional Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.2);
     ambientLight.name = "ambientLight";
     scene.add(ambientLight);
 
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
+    hemiLight.position.set(0, 500, 0);
+    scene.add(hemiLight);
+
     const mainDirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-    mainDirLight.position.set(100, 200, 100);
+    mainDirLight.position.set(200, 400, 200);
     mainDirLight.name = "mainDirLight";
     scene.add(mainDirLight);
 
-    const fillLight = new THREE.DirectionalLight(0x00c8d4, 1.0);
-    fillLight.position.set(-100, 50, -100);
+    const fillLight = new THREE.DirectionalLight(0x00c8d4, 1.2);
+    fillLight.position.set(-200, 200, -200);
     fillLight.name = "fillLight";
     scene.add(fillLight);
 
@@ -315,22 +319,24 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
     const center = bbox.getCenter(new THREE.Vector3());
     const size = bbox.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z) || 10;
+    const maxDim = Math.max(size.x, size.y, size.z) || 60;
 
     const fov = cameraRef.current.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
-    cameraZ = Math.max(cameraZ, 20);
+    let cameraDist = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.5;
+    cameraDist = Math.max(cameraDist, 40);
 
-    cameraRef.current.position.set(center.x + cameraZ * 0.7, center.y + cameraZ * 0.5, center.z + cameraZ * 0.8);
-    cameraRef.current.near = Math.max(0.1, cameraZ / 100);
-    cameraRef.current.far = Math.max(10000, cameraZ * 100);
+    cameraRef.current.position.set(center.x + cameraDist * 0.7, center.y + cameraDist * 0.5, center.z + cameraDist * 0.8);
+    cameraRef.current.near = 0.1;
+    cameraRef.current.far = 500000;
     cameraRef.current.updateProjectionMatrix();
 
     controlsRef.current.target.copy(center);
+    controlsRef.current.maxDistance = 200000;
+    controlsRef.current.minDistance = 0.1;
     controlsRef.current.update();
   };
 
-  // Load 3D GLB / GLTF Model with Robust Fallbacks
+  // Load 3D GLB / GLTF Model with Robust Scale Normalization & Fallbacks
   useEffect(() => {
     if (!sceneRef.current || !selectedModelUrl) return;
 
@@ -364,7 +370,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
             meshCount++;
-            mesh.frustumCulled = true;
+            mesh.frustumCulled = false; // Prevent culling errors
 
             mesh.castShadow = qualityPreset === "HIGH";
             mesh.receiveShadow = qualityPreset === "HIGH";
@@ -382,9 +388,13 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             originalMaterialsRef.current.set(mesh, mesh.material);
 
             if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((m) => (m.side = THREE.DoubleSide));
+              mesh.material.forEach((m) => {
+                m.side = THREE.DoubleSide;
+                m.needsUpdate = true;
+              });
             } else if (mesh.material) {
               mesh.material.side = THREE.DoubleSide;
+              mesh.material.needsUpdate = true;
             }
           }
         });
@@ -397,14 +407,25 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
           faces: Math.round(faceCount),
         });
 
-        // Center model on ground level grid
+        // Compute original bounding box & normalize model scale to 60 units
         model.updateMatrixWorld(true);
         const bbox = new THREE.Box3().setFromObject(model);
-        const center = bbox.getCenter(new THREE.Vector3());
+        if (!bbox.isEmpty()) {
+          const size = bbox.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          if (maxDim > 0) {
+            const scaleFactor = 60.0 / maxDim;
+            model.scale.set(scaleFactor, scaleFactor, scaleFactor);
+            model.updateMatrixWorld(true);
+          }
 
-        model.position.set(-center.x, -bbox.min.y, -center.z);
-        model.updateMatrixWorld(true);
-        model.traverse((c) => c.updateMatrixWorld(true));
+          const scaledBbox = new THREE.Box3().setFromObject(model);
+          const center = scaledBbox.getCenter(new THREE.Vector3());
+
+          model.position.set(-center.x, -scaledBbox.min.y, -center.z);
+          model.updateMatrixWorld(true);
+          model.traverse((c) => c.updateMatrixWorld(true));
+        }
 
         loadedModelRef.current = model;
         sceneRef.current?.add(model);
