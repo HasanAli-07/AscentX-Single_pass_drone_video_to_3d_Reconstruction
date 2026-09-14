@@ -50,14 +50,14 @@ export async function fetchSourceModels(): Promise<SourceModelInfo[]> {
 
 export async function fetchProjectModelInfo(projectId: string, projectName: string): Promise<SourceModelInfo> {
   try {
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/model-info`);
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/model-info?t=${Date.now()}`);
     if (res.ok) {
       const data = await res.json();
       return {
         filename: data.filename,
         name: `🎯 Reconstructed 3D Scan (${projectName})`,
         size_mb: data.size_mb,
-        download_url: `${API_BASE_URL}/projects/${projectId}/files/${data.filename}`,
+        download_url: `${API_BASE_URL}/projects/${projectId}/files/${data.filename}?v=${Date.now()}`,
       };
     }
   } catch (e) {
@@ -66,8 +66,8 @@ export async function fetchProjectModelInfo(projectId: string, projectName: stri
   return {
     filename: "model.glb",
     name: `🎯 Reconstructed 3D Scan (${projectName})`,
-    size_mb: 60.36,
-    download_url: `${API_BASE_URL}/projects/${projectId}/files/model.glb`,
+    size_mb: 0.71,
+    download_url: `${API_BASE_URL}/projects/${projectId}/files/model.glb?v=${Date.now()}`,
   };
 }
 

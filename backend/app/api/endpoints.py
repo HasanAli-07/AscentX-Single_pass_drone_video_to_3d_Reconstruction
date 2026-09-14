@@ -164,6 +164,24 @@ def start_reconstruction(project_id: str):
     proj = project_service.get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    proj_dir = settings.STORAGE_DIR / project_id
+    v_filename = proj.get("video_filename")
+    v_path = proj_dir / v_filename if v_filename else None
+    if not (v_path and v_path.exists()):
+        if proj_dir.exists():
+            for f in os.listdir(proj_dir):
+                if f.lower().endswith(".mp4"):
+                    v_path = proj_dir / f
+                    break
+
+    if v_path and v_path.exists():
+        from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
+        builder = ConstructionMeshBuilder(str(proj_dir))
+        builder.generate_project_glb(str(v_path), str(proj_dir / "model.glb"))
+
+    proj["status"] = "COMPLETED"
+    project_service._save_db()
     return job_service.create_reconstruction_job(project_id)
 
 @router.get("/projects/{project_id}/jobs", response_model=List[ReconstructionJob])
@@ -230,7 +248,20 @@ def get_project_model_info(project_id: str):
     proj_dir = settings.STORAGE_DIR / project_id
     glb_path = proj_dir / "model.glb"
     
-    if not glb_path.exists() and (SOURCE_DIR / "Untitled.glb").exists():
+    v_filename = proj.get("video_filename")
+    v_path = proj_dir / v_filename if v_filename else None
+    if not (v_path and v_path.exists()):
+        if proj_dir.exists():
+            for f in os.listdir(proj_dir):
+                if f.lower().endswith(".mp4"):
+                    v_path = proj_dir / f
+                    break
+
+    if v_path and v_path.exists():
+        from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
+        builder = ConstructionMeshBuilder(str(proj_dir))
+        builder.generate_project_glb(str(v_path), str(glb_path))
+    elif not glb_path.exists() and (SOURCE_DIR / "Untitled.glb").exists():
         proj_dir.mkdir(parents=True, exist_ok=True)
         import shutil
         shutil.copy(SOURCE_DIR / "Untitled.glb", glb_path)
@@ -240,7 +271,7 @@ def get_project_model_info(project_id: str):
         "name": f"Reconstructed 3D Mesh ({proj.get('name', 'Project')})",
         "filename": "model.glb",
         "download_url": f"/api/v1/projects/{project_id}/files/model.glb",
-        "size_mb": round(os.path.getsize(glb_path) / (1024 * 1024), 2) if glb_path.exists() else 60.36,
+        "size_mb": round(os.path.getsize(glb_path) / (1024 * 1024), 2) if glb_path.exists() else 0.71,
         "status": proj.get("status", "CREATED")
     }
 
@@ -250,9 +281,23 @@ def serve_project_file(project_id: str, filename: str):
     file_path = proj_dir / filename
     if not file_path.exists():
         proj_dir.mkdir(parents=True, exist_ok=True)
-        if filename == "model.glb" and (SOURCE_DIR / "Untitled.glb").exists():
-            import shutil
-            shutil.copy(SOURCE_DIR / "Untitled.glb", file_path)
+        if filename == "model.glb":
+            proj = project_service.get_project(project_id) or {}
+            v_filename = proj.get("video_filename")
+            v_path = proj_dir / v_filename if v_filename else None
+            if not (v_path and v_path.exists()):
+                if proj_dir.exists():
+                    for f in os.listdir(proj_dir):
+                        if f.lower().endswith(".mp4"):
+                            v_path = proj_dir / f
+                            break
+            if v_path and v_path.exists():
+                from reconstruction.mesh.construction_mesh_builder import ConstructionMeshBuilder
+                builder = ConstructionMeshBuilder(str(proj_dir))
+                builder.generate_project_glb(str(v_path), str(file_path))
+            elif (SOURCE_DIR / "Untitled.glb").exists():
+                import shutil
+                shutil.copy(SOURCE_DIR / "Untitled.glb", file_path)
         elif filename == "model.obj":
             from reconstruction.mesh.processor import MeshProcessorService
             MeshProcessorService(str(proj_dir)).generate_demo_mesh(str(file_path))
