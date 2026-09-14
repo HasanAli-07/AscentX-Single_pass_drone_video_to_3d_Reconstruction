@@ -372,14 +372,12 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
             const isUltraLow = qualityPreset === "ULTRA_LOW";
 
-            // Apply Frustum Culling, Texture Optimization & Frozen Transformation Matrices
+            // Apply Frustum Culling & Texture Optimization
             model.traverse((child) => {
               if ((child as THREE.Mesh).isMesh) {
                 const mesh = child as THREE.Mesh;
                 meshCount++;
                 mesh.frustumCulled = true;
-                mesh.matrixAutoUpdate = false;
-                mesh.updateMatrix();
 
                 mesh.castShadow = qualityPreset === "HIGH";
                 mesh.receiveShadow = qualityPreset === "HIGH";
@@ -421,11 +419,13 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
             model.position.set(-center.x, -bbox.min.y, -center.z);
             model.updateMatrixWorld(true);
+            model.traverse((c) => c.updateMatrixWorld(true));
 
             loadedModelRef.current = model;
             sceneRef.current?.add(model);
 
             fitCameraToModel(model);
+
 
             setLoadingModel(false);
             setLoadProgress(100);
