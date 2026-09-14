@@ -191,23 +191,29 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     controlsRef.current = controls;
 
     // Multi-Directional Lighting Setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     ambientLight.name = "ambientLight";
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x333333, 0.6);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
     hemiLight.position.set(0, 500, 0);
     scene.add(hemiLight);
 
-    const mainDirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const mainDirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     mainDirLight.position.set(200, 400, 200);
     mainDirLight.name = "mainDirLight";
     scene.add(mainDirLight);
 
-    const fillLight = new THREE.DirectionalLight(0x00c8d4, 0.5);
+    const fillLight = new THREE.DirectionalLight(0x00c8d4, 0.6);
     fillLight.position.set(-200, 200, -200);
     fillLight.name = "fillLight";
     scene.add(fillLight);
+
+    // Camera-attached headlight (shines wherever camera points)
+    const cameraHeadlight = new THREE.DirectionalLight(0xffffff, 1.0);
+    cameraHeadlight.position.set(0, 0, 1);
+    camera.add(cameraHeadlight);
+    scene.add(camera);
 
     // Grid Floor
     const grid = new THREE.GridHelper(300, 60, 0x00c8d4, 0x1c1e24);
