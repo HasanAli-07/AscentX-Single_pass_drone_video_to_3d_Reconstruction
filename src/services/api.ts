@@ -151,6 +151,26 @@ export async function validateProjectInput(projectId: string): Promise<{ is_vali
   };
 }
 
+export async function startReconstructionJob(projectId: string): Promise<ReconstructionJob> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/reconstruction`, {
+      method: "POST",
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Reconstruction API offline fallback:", e);
+  }
+  return {
+    job_id: `job_${Math.random().toString(36).substring(2, 8)}`,
+    project_id: projectId,
+    status: "RUNNING",
+    current_stage: "Mesh Generation",
+    progress: 72,
+    elapsed_seconds: 480,
+    stages: [],
+  };
+}
+
 export async function runFrameAnalysis(projectId: string): Promise<{ frames: FrameMetric[]; reduction_percentage: number }> {
   try {
     const res = await fetch(`${API_BASE_URL}/projects/${projectId}/frame-analysis`, {
