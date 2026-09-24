@@ -1,5 +1,5 @@
 services:
-  # Backend API Service (FastAPI)
+  # Backend API Service (FastAPI Docker Container)
   - type: web
     name: ascentx-backend
     env: docker
@@ -13,11 +13,11 @@ services:
       - key: SECRET_KEY
         generateValue: true
 
-  # Frontend Web Service (Static Site)
+  # Frontend Web Service (Vite Static Site)
   - type: web
     name: ascentx-frontend
     env: static
-    buildCommand: NODE_OPTIONS="--max-old-space-size=4096" npm run build
+    buildCommand: npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite
@@ -25,12 +25,9 @@ services:
         destination: /index.html
     envVars:
       - key: NODE_VERSION
-        value: "20"
-      - key: NODE_OPTIONS
-        value: "--max-old-space-size=4096"
+        value: "20.18.0"
       - key: VITE_API_BASE_URL
         fromService:
           type: web
           name: ascentx-backend
           property: url
-
