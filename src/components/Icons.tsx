@@ -221,3 +221,11 @@ export function IconRefresh({ size = 14, className = "", color, style }: IconPro
     </svg>
   );
 }
+
+export function IconArrowRight({ size = 14, className = "", color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <path d="M5 12h14M12 5l7 7-7 7"/>
+    </svg>
+  );
+}
