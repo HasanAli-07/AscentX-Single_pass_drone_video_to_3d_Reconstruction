@@ -1,7 +1,14 @@
 import React, { useState } from "react";
 import { Project } from "../types";
-import { Badge, Btn } from "./SharedPrimitives";
+import { Badge } from "./SharedPrimitives";
 import { createProject, updateProjectDetails, deleteProject } from "../services/api";
+import {
+  IconFolder,
+  IconSparkles,
+  IconX,
+  IconPlay,
+  IconAlertTriangle,
+} from "./Icons";
 
 interface ProjectFolderManagerProps {
   projects: Project[];
@@ -83,127 +90,134 @@ export function ProjectFolderManager({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono text-xs text-slate-200">
-      <div className="w-full max-w-4xl max-h-[90vh] bg-[#131418] border border-[#2a2b31] rounded-xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 font-mono text-xs text-slate-200">
+      <div className="w-full max-w-4xl max-h-[90vh] border rounded-xl shadow-2xl flex flex-col overflow-hidden transition-colors" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#2a2b31] bg-[#18191d] flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3" style={{ background: "var(--color-header-bg)", borderColor: "var(--color-border)" }}>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-base">
-              📂
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}>
+              <IconFolder size={18} />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">PROJECT FOLDER STORAGE HUB</h2>
-              <p className="text-[10px] text-slate-400">
-                Manage, open, and edit 3D drone reconstruction projects saved in <code className="text-cyan-400 font-semibold">backend/storage/</code>
+              <h2 className="text-sm font-bold" style={{ color: "var(--color-text)" }}>PROJECT FOLDER STORAGE HUB</h2>
+              <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                Manage 3D drone reconstruction projects saved in <code style={{ color: "var(--color-cyan)" }}>backend/storage/</code>
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowNewModal(true)}
-              className="px-3 py-1.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30 transition-colors text-xs font-semibold cursor-pointer flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-colors"
+              style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
             >
-              <span>✨</span> NEW PROJECT FOLDER
+              <IconSparkles size={13} />
+              <span className="hidden sm:inline">NEW FOLDER</span>
             </button>
             <button
               onClick={onClose}
-              className="px-2.5 py-1.5 rounded bg-[#22242b] text-slate-400 hover:text-slate-200 border border-[#2a2b31] text-xs cursor-pointer"
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded text-xs cursor-pointer border transition-colors"
+              style={{ background: "var(--color-panel-bg)", color: "var(--color-text-muted)", borderColor: "var(--color-border)" }}
             >
-              ✕ CLOSE
+              <IconX size={14} />
             </button>
           </div>
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="px-6 py-3 border-b border-[#2a2b31] bg-[#15161b] flex items-center justify-between gap-4">
+        <div className="px-4 sm:px-6 py-3 border-b flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3" style={{ background: "var(--color-panel-bg)", borderColor: "var(--color-border)" }}>
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Search project folders by name, ID, or description..."
+              placeholder="Search projects by name, ID, description..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#1c1d23] text-slate-200 pl-8 pr-4 py-1.5 rounded border border-[#2a2b31] outline-none focus:border-cyan-500/60 text-xs"
+              className="w-full text-slate-200 pl-4 pr-4 py-1.5 rounded border outline-none text-xs"
+              style={{ background: "var(--color-input-bg)", color: "var(--color-text)", borderColor: "var(--color-border)" }}
             />
-            <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">🔍</span>
           </div>
-          <span className="text-[10px] text-slate-400">
-            SHOWING <strong className="text-cyan-400">{filteredProjects.length}</strong> OF {projects.length} PROJECTS
+          <span className="text-[10px] shrink-0" style={{ color: "var(--color-text-muted)" }}>
+            SHOWING <strong style={{ color: "var(--color-cyan)" }}>{filteredProjects.length}</strong> OF {projects.length} PROJECTS
           </span>
         </div>
 
         {/* Project Folder List */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredProjects.map((p) => {
             const isActive = activeProject?.id === p.id;
             return (
               <div
                 key={p.id}
-                className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
-                  isActive
-                    ? "bg-cyan-500/10 border-cyan-500/50 shadow-lg shadow-cyan-500/5"
-                    : "bg-[#18191d] border-[#2a2b31] hover:border-[#3d3e47]"
-                }`}
+                className="p-4 rounded-xl border transition-all flex flex-col justify-between"
+                style={{
+                  background: isActive ? "var(--color-cyan-dim)" : "var(--color-card-bg)",
+                  borderColor: isActive ? "var(--color-cyan)" : "var(--color-border)",
+                }}
               >
                 <div>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-100 font-bold text-sm truncate max-w-[200px]">{p.name}</span>
-                        {isActive && <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/20 text-cyan-400 border border-cyan-400/30">ACTIVE</span>}
+                        <span className="font-bold text-sm truncate max-w-[180px] sm:max-w-[200px]" style={{ color: "var(--color-text)" }}>{p.name}</span>
+                        {isActive && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}>ACTIVE</span>}
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">ID: {p.id}</span>
+                      <span className="text-[10px] font-mono" style={{ color: "var(--color-text-dim)" }}>ID: {p.id}</span>
                     </div>
                     <Badge label={p.status} variant={p.status === "COMPLETED" ? "ok" : "running"} />
                   </div>
 
                   {p.description && (
-                    <p className="text-[11px] text-slate-300 mb-3 line-clamp-2">{p.description}</p>
+                    <p className="text-[11px] mb-3 line-clamp-2" style={{ color: "var(--color-text-muted)" }}>{p.description}</p>
                   )}
 
                   {/* Folder Specs Grid */}
-                  <div className="grid grid-cols-2 gap-2 bg-[#131418] p-2.5 rounded-lg border border-[#23242c] mb-3 text-[10px]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-lg border mb-3 text-[10px]" style={{ background: "var(--color-input-bg)", borderColor: "var(--color-border-subtle)" }}>
                     <div>
-                      <span className="text-slate-500 block">LOCAL STORAGE FOLDER</span>
-                      <span className="text-cyan-400 font-semibold truncate block">storage/{p.id}/</span>
+                      <span className="block" style={{ color: "var(--color-text-dim)" }}>STORAGE PATH</span>
+                      <span className="font-semibold truncate block" style={{ color: "var(--color-cyan)" }}>storage/{p.id}/</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">COORDINATE SYSTEM</span>
-                      <span className="text-slate-300 truncate block">{p.coordinate_system || "WGS84 / UTM 33N"}</span>
+                      <span className="block" style={{ color: "var(--color-text-dim)" }}>CRS SYSTEM</span>
+                      <span className="truncate block" style={{ color: "var(--color-text)" }}>{p.coordinate_system || "WGS84 / UTM 33N"}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">3D MESH & TEXTURE</span>
-                      <span className="text-emerald-400 font-semibold block">model.glb (2048x2048 Atlas)</span>
+                      <span className="block" style={{ color: "var(--color-text-dim)" }}>3D MESH</span>
+                      <span className="font-semibold block text-emerald-500">model.glb (2048x2048)</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">SOURCE VIDEO</span>
-                      <span className="text-slate-300 truncate block">{p.video_filename || "Drone UAV Scan"}</span>
+                      <span className="block" style={{ color: "var(--color-text-dim)" }}>SOURCE VIDEO</span>
+                      <span className="truncate block" style={{ color: "var(--color-text)" }}>{p.video_filename || "Drone UAV Scan"}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Card Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-[#23242c]">
-                  <span className="text-[9px] text-slate-500">
+                <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: "var(--color-border-subtle)" }}>
+                  <span className="text-[9px]" style={{ color: "var(--color-text-dim)" }}>
                     Created {new Date(p.created_at).toLocaleDateString()}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleStartEdit(p)}
-                      className="px-2.5 py-1 rounded bg-[#22242b] text-slate-300 hover:text-cyan-400 border border-[#2a2b31] text-[10px] cursor-pointer"
+                      className="px-2.5 py-1 rounded border text-[10px] cursor-pointer transition-colors"
+                      style={{ background: "var(--color-panel-bg)", color: "var(--color-text-muted)", borderColor: "var(--color-border)" }}
                     >
-                      ✏️ EDIT
+                      EDIT
                     </button>
                     <button
                       onClick={() => setDeletingId(p.id)}
-                      className="px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 text-[10px] cursor-pointer"
+                      className="px-2.5 py-1 rounded border text-[10px] cursor-pointer transition-colors"
+                      style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--color-danger)", borderColor: "var(--color-danger)" }}
                     >
-                      🗑️ DELETE
+                      DELETE
                     </button>
                     <button
                       onClick={() => handleOpenProject(p)}
-                      className="px-3 py-1 rounded bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/40 text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                      className="px-3 py-1 rounded text-[10px] font-bold cursor-pointer flex items-center gap-1 transition-colors"
+                      style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
                     >
-                      <span>🚀</span> OPEN & VIEW 3D
+                      <IconPlay size={11} />
+                      <span>OPEN 3D</span>
                     </button>
                   </div>
                 </div>
@@ -216,39 +230,42 @@ export function ProjectFolderManager({
       {/* Edit Project Modal */}
       {editingProject && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-md bg-[#18191d] border border-[#2a2b31] rounded-xl p-5 shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center border-b border-[#2a2b31] pb-2">
-              <span className="font-bold text-slate-100 text-sm">EDIT PROJECT: {editingProject.id}</span>
-              <button onClick={() => setEditingProject(null)} className="text-slate-400 hover:text-slate-200">✕</button>
+          <div className="w-full max-w-md border rounded-xl p-5 shadow-2xl flex flex-col gap-4" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
+            <div className="flex justify-between items-center border-b pb-2" style={{ borderColor: "var(--color-border)" }}>
+              <span className="font-bold text-sm" style={{ color: "var(--color-text)" }}>EDIT PROJECT: {editingProject.id}</span>
+              <button onClick={() => setEditingProject(null)} className="cursor-pointer" style={{ color: "var(--color-text-muted)" }}><IconX size={16} /></button>
             </div>
 
             <div className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="text-slate-400 text-[10px] mb-1 block">Project Name</label>
+                <label className="text-[10px] mb-1 block" style={{ color: "var(--color-text-muted)" }}>Project Name</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-[#131418] text-slate-100 p-2 rounded border border-[#2a2b31] outline-none"
+                  className="w-full p-2 rounded border outline-none"
+                  style={{ background: "var(--color-input-bg)", color: "var(--color-text)", borderColor: "var(--color-border)" }}
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] mb-1 block">Description</label>
+                <label className="text-[10px] mb-1 block" style={{ color: "var(--color-text-muted)" }}>Description</label>
                 <textarea
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
                   rows={3}
-                  className="w-full bg-[#131418] text-slate-100 p-2 rounded border border-[#2a2b31] outline-none resize-none"
+                  className="w-full p-2 rounded border outline-none resize-none"
+                  style={{ background: "var(--color-input-bg)", color: "var(--color-text)", borderColor: "var(--color-border)" }}
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] mb-1 block">Coordinate Reference System (CRS)</label>
+                <label className="text-[10px] mb-1 block" style={{ color: "var(--color-text-muted)" }}>Coordinate Reference System (CRS)</label>
                 <select
                   value={editCrs}
                   onChange={(e) => setEditCrs(e.target.value)}
-                  className="w-full bg-[#131418] text-cyan-400 p-2 rounded border border-[#2a2b31] outline-none"
+                  className="w-full p-2 rounded border outline-none"
+                  style={{ background: "var(--color-input-bg)", color: "var(--color-cyan)", borderColor: "var(--color-border)" }}
                 >
                   <option value="WGS84 / UTM Zone 33N">WGS84 / UTM Zone 33N (EPSG:32633)</option>
                   <option value="WGS84 / UTM Zone 32N">WGS84 / UTM Zone 32N (EPSG:32632)</option>
@@ -258,16 +275,18 @@ export function ProjectFolderManager({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-[#2a2b31]">
+            <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: "var(--color-border)" }}>
               <button
                 onClick={() => setEditingProject(null)}
-                className="px-3 py-1.5 rounded bg-[#22242b] text-slate-400 text-xs"
+                className="px-3 py-1.5 rounded text-xs cursor-pointer"
+                style={{ background: "var(--color-panel-bg)", color: "var(--color-text-muted)" }}
               >
                 CANCEL
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-1.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold"
+                className="px-4 py-1.5 rounded text-xs font-bold cursor-pointer"
+                style={{ background: "rgba(34, 197, 94, 0.15)", color: "var(--color-success)", border: "1px solid var(--color-success)" }}
               >
                 SAVE CHANGES
               </button>
@@ -279,42 +298,45 @@ export function ProjectFolderManager({
       {/* New Project Modal */}
       {showNewModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-md bg-[#18191d] border border-[#2a2b31] rounded-xl p-5 shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center border-b border-[#2a2b31] pb-2">
-              <span className="font-bold text-slate-100 text-sm">CREATE NEW PROJECT FOLDER</span>
-              <button onClick={() => setShowNewModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+          <div className="w-full max-w-md border rounded-xl p-5 shadow-2xl flex flex-col gap-4" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
+            <div className="flex justify-between items-center border-b pb-2" style={{ borderColor: "var(--color-border)" }}>
+              <span className="font-bold text-sm" style={{ color: "var(--color-text)" }}>CREATE NEW PROJECT FOLDER</span>
+              <button onClick={() => setShowNewModal(false)} className="cursor-pointer" style={{ color: "var(--color-text-muted)" }}><IconX size={16} /></button>
             </div>
 
             <div className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="text-slate-400 text-[10px] mb-1 block">Project Name *</label>
+                <label className="text-[10px] mb-1 block" style={{ color: "var(--color-text-muted)" }}>Project Name *</label>
                 <input
                   type="text"
                   placeholder="e.g., Zurich_MAV_Scan_Session_02"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-[#131418] text-slate-100 p-2 rounded border border-[#2a2b31] outline-none focus:border-cyan-500/60"
+                  className="w-full p-2 rounded border outline-none"
+                  style={{ background: "var(--color-input-bg)", color: "var(--color-text)", borderColor: "var(--color-border)" }}
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] mb-1 block">Description</label>
+                <label className="text-[10px] mb-1 block" style={{ color: "var(--color-text-muted)" }}>Description</label>
                 <textarea
-                  placeholder="Optional site notes, location info, or survey objective..."
+                  placeholder="Optional site notes, location info..."
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   rows={3}
-                  className="w-full bg-[#131418] text-slate-100 p-2 rounded border border-[#2a2b31] outline-none resize-none"
+                  className="w-full p-2 rounded border outline-none resize-none"
+                  style={{ background: "var(--color-input-bg)", color: "var(--color-text)", borderColor: "var(--color-border)" }}
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] mb-1 block">Target Coordinate System (CRS)</label>
+                <label className="text-[10px] mb-1 block" style={{ color: "var(--color-text-muted)" }}>Target Coordinate System (CRS)</label>
                 <select
                   value={newCrs}
                   onChange={(e) => setNewCrs(e.target.value)}
-                  className="w-full bg-[#131418] text-cyan-400 p-2 rounded border border-[#2a2b31] outline-none"
+                  className="w-full p-2 rounded border outline-none"
+                  style={{ background: "var(--color-input-bg)", color: "var(--color-cyan)", borderColor: "var(--color-border)" }}
                 >
                   <option value="WGS84 / UTM Zone 33N">WGS84 / UTM Zone 33N (EPSG:32633)</option>
                   <option value="WGS84 / UTM Zone 32N">WGS84 / UTM Zone 32N (EPSG:32632)</option>
@@ -324,16 +346,18 @@ export function ProjectFolderManager({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-[#2a2b31]">
+            <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: "var(--color-border)" }}>
               <button
                 onClick={() => setShowNewModal(false)}
-                className="px-3 py-1.5 rounded bg-[#22242b] text-slate-400 text-xs"
+                className="px-3 py-1.5 rounded text-xs cursor-pointer"
+                style={{ background: "var(--color-panel-bg)", color: "var(--color-text-muted)" }}
               >
                 CANCEL
               </button>
               <button
                 onClick={handleCreateNew}
-                className="px-4 py-1.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-bold"
+                className="px-4 py-1.5 rounded text-xs font-bold cursor-pointer"
+                style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
               >
                 CREATE PROJECT FOLDER
               </button>
@@ -345,22 +369,26 @@ export function ProjectFolderManager({
       {/* Delete Confirmation Modal */}
       {deletingId && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-sm bg-[#18191d] border border-rose-500/40 rounded-xl p-5 shadow-2xl flex flex-col gap-4 text-center">
-            <span className="text-2xl">⚠️</span>
-            <h3 className="text-sm font-bold text-slate-100">CONFIRM PROJECT DELETION</h3>
-            <p className="text-xs text-slate-400">
-              Are you sure you want to delete project folder <strong className="text-rose-400">{deletingId}</strong> and all its 3D mesh files from disk?
+          <div className="w-full max-w-sm border rounded-xl p-5 shadow-2xl flex flex-col gap-4 text-center" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-danger)" }}>
+            <div className="flex justify-center text-rose-500">
+              <IconAlertTriangle size={32} />
+            </div>
+            <h3 className="text-sm font-bold" style={{ color: "var(--color-text)" }}>CONFIRM PROJECT DELETION</h3>
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              Are you sure you want to delete project folder <strong style={{ color: "var(--color-danger)" }}>{deletingId}</strong> and all its 3D mesh files from disk?
             </p>
             <div className="flex justify-center gap-3 pt-2">
               <button
                 onClick={() => setDeletingId(null)}
-                className="px-4 py-1.5 rounded bg-[#22242b] text-slate-300 text-xs cursor-pointer"
+                className="px-4 py-1.5 rounded text-xs cursor-pointer"
+                style={{ background: "var(--color-panel-bg)", color: "var(--color-text-muted)" }}
               >
                 CANCEL
               </button>
               <button
                 onClick={() => handleDeleteConfirm(deletingId)}
-                className="px-4 py-1.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-bold cursor-pointer"
+                className="px-4 py-1.5 rounded text-xs font-bold cursor-pointer"
+                style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--color-danger)", border: "1px solid var(--color-danger)" }}
               >
                 DELETE FOREVER
               </button>

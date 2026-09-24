@@ -10,7 +10,7 @@ export function GeorefWorkspace({ project }: GeorefWorkspaceProps) {
     <div className="flex-1 flex overflow-hidden p-4 gap-4 font-mono text-xs text-slate-200">
       <div className="flex-1 flex flex-col gap-4 overflow-y-auto">
         {/* Header Badge */}
-        <div className="flex justify-between items-center bg-[#18191d] p-3 rounded-lg border border-[#2a2b31]">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#18191d] p-3 rounded-lg border border-[#2a2b31] gap-2">
           <span className="stat-label text-slate-400 font-semibold">GEOREFERENCING & SPATIAL ALIGNMENT</span>
           <span className="text-cyan-400 font-semibold">{project?.name || "scan_session_2024_11_08"} ({project?.id})</span>
         </div>
@@ -29,7 +29,7 @@ export function GeorefWorkspace({ project }: GeorefWorkspaceProps) {
                 <circle key={i} cx={x} cy={y} r="3" fill="#f59e0b" fillOpacity="0.7" />
               ))}
             </svg>
-            <div className="absolute bottom-2 left-3 flex gap-3">
+            <div className="absolute bottom-2 left-3 flex flex-wrap gap-2 sm:gap-3 bg-black/60 p-1.5 rounded border border-[#2a2b31]">
               {[
                 { col: "#3d7fff", label: "Flight Path" },
                 { col: "#00c8d4", label: "Model Bounding Box" },
@@ -38,7 +38,7 @@ export function GeorefWorkspace({ project }: GeorefWorkspaceProps) {
               ].map((l) => (
                 <div key={l.label} className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full" style={{ background: l.col }} />
-                  <span className="stat-label" style={{ color: l.col }}>{l.label}</span>
+                  <span className="stat-label text-[9px] sm:text-[10px]" style={{ color: l.col }}>{l.label}</span>
                 </div>
               ))}
             </div>
@@ -48,7 +48,7 @@ export function GeorefWorkspace({ project }: GeorefWorkspaceProps) {
         {/* Coordinate data */}
         <div className="rounded-lg p-4 bg-[#18191d] border border-[#2a2b31]">
           <div className="stat-label mb-3 text-slate-400">COORDINATE REFERENCE SYSTEM & GEODETIC METRICS</div>
-          <div className="grid gap-2 grid-cols-2">
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
             <StatRow label="Coordinate System" value={project?.coordinate_system || "WGS84 / UTM Zone 33N"} />
             <StatRow label="GPS Accuracy" value="±2.0 cm (RTK Fixed)" accent />
             <StatRow label="Latitude" value={`${project?.latitude_deg || 48.8566}° N`} />

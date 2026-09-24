@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Project } from "../types";
 import { Badge, Btn } from "../components/SharedPrimitives";
 import { startReconstructionJob, updateProjectDetails } from "../services/api";
+import { IconRefresh, IconPlay, IconPause, IconX, IconTarget, IconSparkles, IconCheck, IconArrowRight } from "../components/Icons";
 
 export interface ReconstructionState {
   isRunning: boolean;
@@ -146,7 +147,7 @@ export function ReconstructionWorkspace({
           } else {
             // All 9 stages complete!
             setIsRunning(false);
-            pushLog("🎉 3D Reconstruction Pipeline execution finished successfully! 3D Model ready for visualizer.");
+            pushLog("3D Reconstruction Pipeline execution finished successfully! 3D Model ready for visualizer.");
             
             if (project) {
               const updated: Project = {
@@ -192,29 +193,48 @@ export function ReconstructionWorkspace({
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 font-mono text-xs text-slate-200">
       {/* Header controls & Status */}
-      <div className="flex items-center justify-between bg-[#18191d] p-3 rounded-lg border border-[#2a2b31]">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between bg-[#18191d] p-3 rounded-lg border border-[#2a2b31] gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {!isRunning && (
             <button
               onClick={handleStart}
               className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-bold hover:bg-cyan-500/30 transition-colors cursor-pointer flex items-center gap-1.5 shadow-md"
             >
-              {isAllDone ? "🔄 RE-RUN RECONSTRUCTION PIPELINE" : "▶ START RECONSTRUCTION PIPELINE"}
+              {isAllDone ? <IconRefresh size={14} /> : <IconPlay size={14} />}
+              <span>{isAllDone ? "RE-RUN RECONSTRUCTION PIPELINE" : "START RECONSTRUCTION PIPELINE"}</span>
             </button>
           )}
           {isRunning && !isPaused && (
-            <Btn label="⏸ PAUSE" variant="ghost" onClick={handlePause} />
+            <button
+              onClick={handlePause}
+              className="px-3 py-1.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 flex items-center gap-1.5 cursor-pointer text-xs font-semibold"
+            >
+              <IconPause size={12} />
+              <span>PAUSE</span>
+            </button>
           )}
           {isRunning && isPaused && (
-            <Btn label="▶ RESUME" variant="primary" onClick={handleResume} />
+            <button
+              onClick={handleResume}
+              className="px-3 py-1.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30 flex items-center gap-1.5 cursor-pointer text-xs font-semibold"
+            >
+              <IconPlay size={12} />
+              <span>RESUME</span>
+            </button>
           )}
           {isRunning && (
-            <Btn label="✖ CANCEL" variant="danger" onClick={handleCancel} />
+            <button
+              onClick={handleCancel}
+              className="px-3 py-1.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30 flex items-center gap-1.5 cursor-pointer text-xs font-semibold"
+            >
+              <IconX size={12} />
+              <span>CANCEL</span>
+            </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-slate-400 text-xs font-semibold">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3">
+          <div className="text-slate-400 text-xs font-semibold truncate">
             PROJECT: <span className="text-cyan-400">{project?.name || "scan_session"}</span> ({project?.id || "N/A"})
           </div>
           {isAllDone && onNavigate && (
@@ -222,7 +242,9 @@ export function ReconstructionWorkspace({
               onClick={() => onNavigate("visualization")}
               className="px-4 py-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 animate-pulse shadow-md"
             >
-              🎯 VIEW RECONSTRUCTED 3D MODEL ➔
+              <IconTarget size={14} />
+              <span>VIEW RECONSTRUCTED 3D MODEL</span>
+              <IconArrowRight size={14} />
             </button>
           )}
         </div>
@@ -230,17 +252,19 @@ export function ReconstructionWorkspace({
 
       {/* Completion Banner */}
       {isAllDone && !isRunning && (
-        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between shadow-lg">
+        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-lg">
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 text-sm font-bold">🎉 3D RECONSTRUCTION COMPLETE!</span>
-            <span className="text-slate-300 text-xs">Sparse Cloud: 184,392 pts | Dense Mesh: 4,200,000 pts</span>
+            <IconSparkles size={16} className="text-emerald-400" />
+            <span className="text-emerald-400 text-sm font-bold">3D RECONSTRUCTION COMPLETE!</span>
+            <span className="hidden md:inline text-slate-300 text-xs">| Sparse Cloud: 184,392 pts | Dense Mesh: 4,200,000 pts</span>
           </div>
           {onNavigate && (
             <button
               onClick={() => onNavigate("visualization")}
-              className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 cursor-pointer"
+              className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 cursor-pointer flex items-center gap-1.5"
             >
-              OPEN 3D VISUALIZER
+              <span>OPEN 3D VISUALIZER</span>
+              <IconArrowRight size={12} />
             </button>
           )}
         </div>
@@ -248,7 +272,7 @@ export function ReconstructionWorkspace({
 
       {/* Reconstruction Pipeline Stage Cards */}
       <div className="rounded-lg overflow-hidden bg-[#18191d] border border-[#2a2b31]">
-        <div className="px-3 py-2 border-b border-[#1f2025] flex justify-between items-center bg-[#131418]">
+        <div className="px-3 py-2 border-b border-[#1f2025] flex justify-between items-center bg-[#131418] flex-wrap gap-2">
           <span className="stat-label text-slate-400 font-semibold">SINGLE-PASS RECONSTRUCTION STAGE EXECUTION</span>
           <Badge
             label={isRunning ? (isPaused ? "PAUSED" : `RUNNING - STAGE ${activeStageIdx + 1}/9`) : isAllDone ? "COMPLETED" : "READY TO START"}
@@ -263,22 +287,34 @@ export function ReconstructionWorkspace({
           const currentPct = isDone ? 100 : isCurrent ? stageProgress : 0;
 
           return (
-            <div key={s.name} className="flex items-center gap-3 px-4 py-3 border-b border-[#1a1b1f] last:border-none">
-              <div
-                className="flex items-center justify-center w-5 h-5 rounded text-xs flex-shrink-0 font-bold"
-                style={{
-                  background: isDone ? "#22c55e20" : isCurrent ? "#00c8d420" : "#1e1f24",
-                  color: isDone ? "#22c55e" : isCurrent ? "#00c8d4" : "#3a3d4a",
-                  fontFamily: "JetBrains Mono,monospace",
-                  fontSize: 10,
-                  border: "1px solid currentColor",
-                }}
-              >
-                {isDone ? "✓" : i + 1}
+            <div key={s.name} className="flex flex-col md:flex-row items-start md:items-center gap-3 px-4 py-3 border-b border-[#1a1b1f] last:border-none">
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <div
+                  className="flex items-center justify-center w-5 h-5 rounded text-xs flex-shrink-0 font-bold"
+                  style={{
+                    background: isDone ? "#22c55e20" : isCurrent ? "#00c8d420" : "#1e1f24",
+                    color: isDone ? "#22c55e" : isCurrent ? "#00c8d4" : "#3a3d4a",
+                    fontFamily: "JetBrains Mono,monospace",
+                    fontSize: 10,
+                    border: "1px solid currentColor",
+                  }}
+                >
+                  {isDone ? <IconCheck size={10} /> : i + 1}
+                </div>
+
+                <div className="flex-1 md:hidden flex justify-between items-center">
+                  <span className={`text-xs ${isQueued ? "text-slate-500" : isDone ? "text-slate-200" : "text-cyan-400 font-bold"}`}>
+                    {s.name}
+                  </span>
+                  <Badge
+                    label={isDone ? "OK" : isCurrent ? "RUN" : "QUEUE"}
+                    variant={isDone ? "ok" : isCurrent ? "running" : "queued"}
+                  />
+                </div>
               </div>
 
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
+              <div className="flex-1 w-full">
+                <div className="hidden md:flex items-center gap-2 mb-1">
                   <span className={`text-xs ${isQueued ? "text-slate-500" : isDone ? "text-slate-200" : "text-cyan-400 font-bold"}`}>
                     {s.name}
                   </span>
@@ -288,7 +324,7 @@ export function ReconstructionWorkspace({
                   />
                 </div>
                 {!isQueued && (
-                  <div className="h-1.5 rounded bg-[#1e1f24] overflow-hidden">
+                  <div className="h-1.5 rounded bg-[#1e1f24] overflow-hidden w-full">
                     <div
                       className="h-full rounded transition-all duration-300"
                       style={{
@@ -300,20 +336,20 @@ export function ReconstructionWorkspace({
                 )}
               </div>
 
-              <div className="flex gap-4 text-right flex-shrink-0">
+              <div className="flex items-center justify-between md:justify-end gap-4 text-right flex-shrink-0 w-full md:w-auto text-[11px]">
                 <div>
-                  <div className="stat-label text-slate-500">TIME</div>
-                  <div className="text-slate-400 text-[11px] font-mono">{s.time}</div>
+                  <div className="stat-label text-slate-500 text-[9px]">TIME</div>
+                  <div className="text-slate-400 font-mono">{s.time}</div>
                 </div>
                 <div>
-                  <div className="stat-label text-slate-500">GPU</div>
-                  <div className={`text-[11px] font-mono ${s.gpu > 80 ? "text-amber-400 font-bold" : "text-slate-400"}`}>
+                  <div className="stat-label text-slate-500 text-[9px]">GPU</div>
+                  <div className={`font-mono ${s.gpu > 80 ? "text-amber-400 font-bold" : "text-slate-400"}`}>
                     {isCurrent ? `${s.gpu}%` : isDone ? `${Math.round(s.gpu * 0.4)}%` : "—"}
                   </div>
                 </div>
-                <div style={{ width: 180 }}>
-                  <div className="stat-label text-slate-500">OUTPUT</div>
-                  <div className="text-slate-400 text-[11px] truncate">{s.defaultOutput}</div>
+                <div className="md:w-44 text-right">
+                  <div className="stat-label text-slate-500 text-[9px]">OUTPUT</div>
+                  <div className="text-slate-400 truncate max-w-[140px] md:max-w-[180px]">{s.defaultOutput}</div>
                 </div>
               </div>
             </div>

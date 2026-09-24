@@ -5,6 +5,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DisplayMode, ViewToggle, Project } from "../types";
 import { fetchSourceModels, fetchProjectModelInfo, SourceModelInfo } from "../services/api";
+import { IconTarget, IconAlertTriangle, IconZap, IconBattery, IconScale, IconSparkles, IconSliders } from "../components/Icons";
 
 interface ThreeGLBViewerProps {
   displayMode: DisplayMode;
@@ -650,7 +651,10 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
       {/* WebGL Context Loss Banner */}
       {webglContextLost && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-30 p-6 text-center backdrop-blur" style={{ background: "var(--color-bg)" }}>
-          <span className="text-amber-500 text-sm font-mono font-bold mb-2">⚠️ WEBGL CONTEXT LOST DETECTED</span>
+          <span className="text-amber-500 text-sm font-mono font-bold mb-2 flex items-center gap-1.5">
+            <IconAlertTriangle size={16} />
+            <span>WEBGL CONTEXT LOST DETECTED</span>
+          </span>
           <p className="text-xs font-mono max-w-md mb-4" style={{ color: "var(--color-text-muted)" }}>
             GPU memory limit reached on low configuration device. Re-initializing lightweight rendering mode...
           </p>
@@ -659,10 +663,11 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
               setWebglContextLost(false);
               setQualityPreset("ULTRA_LOW");
             }}
-            className="px-4 py-2 rounded text-xs font-mono cursor-pointer"
+            className="px-4 py-2 rounded text-xs font-mono cursor-pointer flex items-center gap-1"
             style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
           >
-            FORCE RECOVERY (ULTRA LOW SPEC)
+            <IconZap size={13} />
+            <span>FORCE RECOVERY (ULTRA LOW SPEC)</span>
           </button>
         </div>
       )}
@@ -677,9 +682,9 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
       )}
 
       {/* Top Left Model Selector & Performance Meter */}
-      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-        <div className="flex items-center gap-2 p-1.5 rounded backdrop-blur shadow-lg border" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
-          <span className="text-[10px] font-mono" style={{ color: "var(--color-text-muted)" }}>ACTIVE 3D MODEL:</span>
+      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 max-w-[calc(100vw-1.5rem)]">
+        <div className="flex flex-wrap items-center gap-2 p-1.5 rounded backdrop-blur shadow-lg border" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
+          <span className="text-[10px] font-mono hidden sm:inline" style={{ color: "var(--color-text-muted)" }}>ACTIVE 3D MODEL:</span>
           <select
             value={selectedModelUrl}
             onChange={(e) => {
@@ -689,7 +694,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
                 setSelectedModelName(chosen.name);
               }
             }}
-            className="text-xs font-mono px-2 py-1 rounded border outline-none cursor-pointer max-w-xs truncate"
+            className="text-xs font-mono px-2 py-1 rounded border outline-none cursor-pointer max-w-[160px] sm:max-w-xs truncate"
             style={{ background: "var(--color-input-bg)", color: "var(--color-cyan)", borderColor: "var(--color-border)" }}
           >
             {sourceModels.map((m) => (
@@ -701,21 +706,22 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
 
           <button
             onClick={() => loadedModelRef.current && fitCameraToModel(loadedModelRef.current)}
-            className="px-2.5 py-1 rounded text-[9px] font-mono transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded text-[9px] font-mono transition-colors cursor-pointer flex items-center gap-1"
             style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
           >
-            🎯 FIT TO SCREEN
+            <IconTarget size={11} />
+            <span>FIT TO SCREEN</span>
           </button>
         </div>
 
         {/* Real-time FPS & Model Statistics Badge */}
-        <div className="flex items-center gap-3 px-2.5 py-1 rounded border text-[9px] font-mono backdrop-blur w-fit shadow-md" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)", color: "var(--color-text-muted)" }}>
-          <span className="font-bold" style={{ color: "var(--color-cyan)" }}>{selectedModelName}</span>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-2.5 py-1 rounded border text-[9px] font-mono backdrop-blur w-fit shadow-md" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)", color: "var(--color-text-muted)" }}>
+          <span className="font-bold truncate max-w-[120px] sm:max-w-none" style={{ color: "var(--color-cyan)" }}>{selectedModelName}</span>
           <span>FPS: <strong className={currentFps < 30 ? "text-amber-500 font-bold" : "text-emerald-500"}>{currentFps}</strong></span>
           {modelStats && (
             <>
-              <span>VERTS: <strong className="text-emerald-500">{modelStats.vertices.toLocaleString()}</strong></span>
-              <span>FACES: <strong className="text-indigo-500">{modelStats.faces.toLocaleString()}</strong></span>
+              <span className="hidden sm:inline">VERTS: <strong className="text-emerald-500">{modelStats.vertices.toLocaleString()}</strong></span>
+              <span className="hidden sm:inline">FACES: <strong className="text-indigo-500">{modelStats.faces.toLocaleString()}</strong></span>
             </>
           )}
           <span>MAX TEX: <strong style={{ color: "var(--color-cyan)" }}>{maxTextureSize}px</strong></span>
@@ -726,33 +732,44 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
       <div className="absolute top-3 right-3 z-10 flex flex-col gap-2 items-end">
         <button
           onClick={() => setShowControlsPanel((p) => !p)}
-          className="px-3 py-1.5 rounded bg-[#18191d]/90 text-cyan-400 border border-[#2a2b31] text-[10px] font-mono backdrop-blur hover:bg-[#1f2025] transition-colors cursor-pointer shadow-lg"
+          className="px-3 py-1.5 rounded text-[10px] font-mono backdrop-blur transition-colors cursor-pointer shadow-lg flex items-center gap-1.5"
+          style={{ background: "var(--color-card-bg)", color: "var(--color-cyan)", border: "1px solid var(--color-border)" }}
         >
-          {showControlsPanel ? "HIDE CUSTOMIZER" : "CUSTOMIZE 3D MODEL"}
+          <IconSliders size={12} />
+          <span>{showControlsPanel ? "HIDE CUSTOMIZER" : "CUSTOMIZE 3D MODEL"}</span>
         </button>
 
         {showControlsPanel && (
-          <div className="w-72 p-3 rounded-lg bg-[#18191d]/95 border border-[#2a2b31] shadow-2xl flex flex-col gap-3 backdrop-blur text-xs font-mono">
-            <div className="text-[10px] text-slate-400 border-b border-[#2a2b31] pb-1 font-semibold flex justify-between items-center">
+          <div className="w-64 sm:w-72 p-3 rounded-lg border shadow-2xl flex flex-col gap-3 backdrop-blur text-xs font-mono max-h-[80vh] overflow-y-auto" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
+            <div className="text-[10px] border-b pb-1 font-semibold flex justify-between items-center" style={{ color: "var(--color-text-muted)", borderColor: "var(--color-border-subtle)" }}>
               <span>3D RENDER OPTIMIZER</span>
-              <span className="text-cyan-400 text-[9px]">{qualityPreset.replace("_", " ")}</span>
+              <span className="text-[9px]" style={{ color: "var(--color-cyan)" }}>{qualityPreset.replace("_", " ")}</span>
             </div>
 
             {/* Performance Quality Preset Selector */}
             <div className="flex flex-col gap-1">
-              <span className="text-slate-400 text-[10px]">Render Quality Mode</span>
+              <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Render Quality Mode</span>
               <div className="grid grid-cols-2 gap-1">
                 {(["ULTRA_LOW", "LOW", "BALANCED", "HIGH"] as const).map((q) => (
                   <button
                     key={q}
                     onClick={() => setQualityPreset(q)}
-                    className={`py-1 px-1.5 rounded text-[9px] border transition-colors cursor-pointer text-center ${
+                    className={`py-1 px-1.5 rounded text-[9px] border transition-colors cursor-pointer text-center flex items-center justify-center gap-1 ${
                       qualityPreset === q
-                        ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 font-semibold"
-                        : "bg-[#131418] text-slate-400 border-[#2a2b31] hover:text-slate-200"
+                        ? "font-semibold"
+                        : "hover:opacity-80"
                     }`}
+                    style={{
+                      background: qualityPreset === q ? "var(--color-cyan-dim)" : "var(--color-input-bg)",
+                      color: qualityPreset === q ? "var(--color-cyan)" : "var(--color-text-muted)",
+                      borderColor: qualityPreset === q ? "var(--color-cyan)" : "var(--color-border)",
+                    }}
                   >
-                    {q === "ULTRA_LOW" ? "⚡ ULTRA LOW" : q === "LOW" ? "🔋 LOW GPU" : q === "BALANCED" ? "⚖️ BALANCED" : "✨ HIGH PBR"}
+                    {q === "ULTRA_LOW" && <IconZap size={10} />}
+                    {q === "LOW" && <IconBattery size={10} />}
+                    {q === "BALANCED" && <IconScale size={10} />}
+                    {q === "HIGH" && <IconSparkles size={10} />}
+                    <span>{q === "ULTRA_LOW" ? "ULTRA LOW" : q === "LOW" ? "LOW GPU" : q === "BALANCED" ? "BALANCED" : "HIGH PBR"}</span>
                   </button>
                 ))}
               </div>

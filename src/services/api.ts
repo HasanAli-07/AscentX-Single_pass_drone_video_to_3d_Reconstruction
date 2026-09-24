@@ -55,7 +55,7 @@ export async function fetchProjectModelInfo(projectId: string, projectName: stri
       const data = await res.json();
       return {
         filename: data.filename,
-        name: `🎯 Reconstructed 3D Scan (${projectName})`,
+        name: `Reconstructed 3D Scan (${projectName})`,
         size_mb: data.size_mb,
         download_url: `${API_BASE_URL}/projects/${projectId}/files/${data.filename}?v=${Date.now()}`,
       };
@@ -65,7 +65,7 @@ export async function fetchProjectModelInfo(projectId: string, projectName: stri
   }
   return {
     filename: "model.glb",
-    name: `🎯 Reconstructed 3D Scan (${projectName})`,
+    name: `Reconstructed 3D Scan (${projectName})`,
     size_mb: 0.71,
     download_url: `${API_BASE_URL}/projects/${projectId}/files/model.glb?v=${Date.now()}`,
   };

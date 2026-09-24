@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Project, FrameMetric } from "../types";
 import { Badge, Btn } from "../components/SharedPrimitives";
 import { runFrameAnalysis } from "../services/api";
+import { IconArrowRight } from "../components/Icons";
 
 interface FrameWorkspaceProps {
   project: Project | null;
@@ -38,16 +39,16 @@ export function FrameWorkspace({ project, onNavigate }: FrameWorkspaceProps) {
   const rejectedCount = frames.filter((f) => f.selection_type === "REJECTED").length;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4 font-mono text-xs text-slate-200">
+    <div className="flex-1 flex flex-col overflow-y-auto p-4 gap-4 font-mono text-xs text-slate-200">
       {/* Stats row */}
-      <div className="flex gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Total Frames", value: (project?.total_frames || frames.length * 15 || 600).toLocaleString() },
           { label: "Selected Keyframes", value: (project?.selected_frames || selectedCount * 12 || 390).toLocaleString(), accent: true },
           { label: "Rejected Redundant", value: ((project?.total_frames || 600) - (project?.selected_frames || 390)).toLocaleString() },
           { label: "Frame Reduction Rate", value: `${reduction}%` },
         ].map((s) => (
-          <div key={s.label} className="flex-1 p-3 rounded bg-[#18191d] border border-[#2a2b31]">
+          <div key={s.label} className="p-3 rounded bg-[#18191d] border border-[#2a2b31]">
             <div className="stat-label mb-1 text-slate-400">{s.label}</div>
             <div className={`text-lg font-semibold ${s.accent ? "text-cyan-400" : "text-slate-100"}`}>
               {s.value}
@@ -73,7 +74,7 @@ export function FrameWorkspace({ project, onNavigate }: FrameWorkspaceProps) {
           <span className="stat-label text-slate-500">00:00</span>
           <span className="stat-label text-slate-500">{project?.video_duration_sec ? `${Math.floor(project.video_duration_sec / 60)}m ${Math.floor(project.video_duration_sec % 60)}s` : "00:20"}</span>
         </div>
-        <div className="flex gap-3 mt-2">
+        <div className="flex flex-wrap gap-3 mt-2">
           {categories.map((cat) => (
             <div key={cat} className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm" style={{ background: catColors[cat] }} />
@@ -84,17 +85,18 @@ export function FrameWorkspace({ project, onNavigate }: FrameWorkspaceProps) {
       </div>
 
       {/* Frame table */}
-      <div className="flex-1 rounded-lg overflow-hidden flex flex-col bg-[#18191d] border border-[#2a2b31]">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2025]">
+      <div className="flex-1 rounded-lg overflow-hidden flex flex-col bg-[#18191d] border border-[#2a2b31] min-h-[300px]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-3 py-2 border-b border-[#1f2025] gap-2">
           <span className="stat-label text-slate-400">SINGLE-PASS KEYFRAME QUALITY REPORT</span>
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Btn label={loading ? "ANALYZING..." : "RUN ANALYSIS"} variant="primary" onClick={loadFrameData} />
             {onNavigate && (
               <button
                 onClick={() => onNavigate("reconstruction")}
-                className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 transition-colors cursor-pointer"
+                className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                ACCEPT SELECTION & RECONSTRUCT ➔
+                <span>ACCEPT SELECTION & RECONSTRUCT</span>
+                <IconArrowRight size={14} />
               </button>
             )}
           </div>

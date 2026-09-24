@@ -2,6 +2,7 @@ import { useState, useRef, ChangeEvent, DragEvent } from "react";
 import { Project } from "../types";
 import { StatRow, Badge, Btn } from "../components/SharedPrimitives";
 import { uploadProjectFiles, validateProjectInput, updateProjectDetails } from "../services/api";
+import { IconFolder, IconCheck, IconPlay, IconArrowRight } from "../components/Icons";
 
 interface InputWorkspaceProps {
   project: Project | null;
@@ -174,22 +175,23 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
       />
 
       {/* Section A: Drone Video Upload & Interactive Player */}
-      <div className="rounded-lg p-4" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-        <div className="flex items-center justify-between mb-3">
+      <div className="rounded-lg p-4 bg-[#18191d] border border-[#2a2b31]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
           <div className="flex items-center gap-2">
             <span className="stat-label text-slate-400 font-semibold">A. DRONE VIDEO STREAM</span>
             <span className="text-[10px] text-cyan-400">PROJECT: {project.name}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge
-              label={project.video_filename ? `✓ ${project.video_filename}` : "AWAITING VIDEO"}
+              label={project.video_filename ? `${project.video_filename}` : "AWAITING VIDEO"}
               variant={project.video_filename ? "ok" : "warn"}
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] hover:bg-cyan-500/30 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] hover:bg-cyan-500/30 transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              📂 BROWSE DRONE VIDEO
+              <IconFolder size={12} />
+              <span>BROWSE DRONE VIDEO</span>
             </button>
           </div>
         </div>
@@ -229,7 +231,7 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
             ) : (
               <div className="flex flex-col items-center justify-center text-center py-6">
                 <div className="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-xl mb-3 group-hover:scale-110 transition-transform">
-                  ▶
+                  <IconPlay size={20} />
                 </div>
                 <span className="text-slate-200 font-semibold text-xs mb-1">
                   {dragActive ? "DROP DRONE VIDEO FILE HERE" : "DRAG & DROP DRONE VIDEO FILE (.MP4, .MOV, .AVI, .MKV)"}
@@ -244,7 +246,7 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
             {isUploading && (
               <div className="absolute inset-0 bg-[#0d0e11]/90 flex flex-col items-center justify-center p-4 z-10">
                 <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-2" />
-                <span className="text-cyan-400 text-xs font-semibold mb-1">PROCESING DRONE VIDEO ({uploadProgress}%)...</span>
+                <span className="text-cyan-400 text-xs font-semibold mb-1">PROCESSING DRONE VIDEO ({uploadProgress}%)...</span>
                 <div className="w-48 h-1.5 bg-[#1a1b20] rounded-full overflow-hidden">
                   <div className="h-full bg-cyan-400 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                 </div>
@@ -279,11 +281,11 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
       </div>
 
       {/* Section B: Flight Telemetry & Metadata */}
-      <div className="rounded-lg p-4" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-        <div className="flex items-center justify-between mb-3">
+      <div className="rounded-lg p-4 bg-[#18191d] border border-[#2a2b31]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
           <span className="stat-label text-slate-400 font-semibold">B. FLIGHT METADATA & TELEMETRY</span>
-          <div className="flex items-center gap-2">
-            <Badge label={project.has_gps ? "✓ GPS ACTIVE" : "AWAITING LOG"} variant={project.has_gps ? "ok" : "warn"} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge label={project.has_gps ? "GPS ACTIVE" : "AWAITING LOG"} variant={project.has_gps ? "ok" : "warn"} />
             <button
               onClick={() => metaInputRef.current?.click()}
               className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-[#2a2b31] text-[10px] hover:text-cyan-400 transition-colors cursor-pointer"
@@ -305,11 +307,11 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
       </div>
 
       {/* Section C: Camera Intrinsic Parameters */}
-      <div className="rounded-lg p-4" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-        <div className="flex items-center justify-between mb-3">
+      <div className="rounded-lg p-4 bg-[#18191d] border border-[#2a2b31]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
           <span className="stat-label text-slate-400 font-semibold">C. CAMERA OPTICAL INTRINSICS</span>
-          <div className="flex items-center gap-2">
-            <Badge label={project.has_calibration ? "✓ CALIBRATED" : "DEFAULT INTRINSICS"} variant="ok" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge label={project.has_calibration ? "CALIBRATED" : "DEFAULT INTRINSICS"} variant="ok" />
             <button
               onClick={() => calibInputRef.current?.click()}
               className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-[#2a2b31] text-[10px] hover:text-cyan-400 transition-colors cursor-pointer"
@@ -329,8 +331,8 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
       </div>
 
       {/* Validation & Navigation Footer */}
-      <div className="flex items-center justify-between p-4 rounded-lg bg-[#18191d] border border-[#2a2b31]">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-4 rounded-lg bg-[#18191d] border border-[#2a2b31] gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Btn label="RUN INPUT VALIDATION" variant="primary" onClick={handleValidate} />
           {validated && <Badge label="ALL CHECKS PASSED (READY FOR RECONSTRUCTION)" variant="ok" />}
           {!validated && <span className="text-slate-400 text-[11px]">Run input check before starting frame selection.</span>}
@@ -339,9 +341,10 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
         {validated && (
           <button
             onClick={() => onNavigate("frames")}
-            className="px-4 py-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5"
+            className="px-4 py-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
           >
-            PROCEED TO FRAME SELECTION ➔
+            <span>PROCEED TO FRAME SELECTION</span>
+            <IconArrowRight size={14} />
           </button>
         )}
       </div>

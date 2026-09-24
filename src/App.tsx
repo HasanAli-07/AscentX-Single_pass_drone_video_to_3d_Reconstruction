@@ -31,6 +31,8 @@ export default function App() {
     return (localStorage.getItem("ascentx_theme") as "dark" | "light") || "dark";
   });
 
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+
   const [reconstructionState, setReconstructionState] = useState<ReconstructionState>({
     isRunning: false,
     isPaused: false,
@@ -161,16 +163,22 @@ export default function App() {
         onExport={() => setActiveSection("export")}
         onNewProject={handleCreateNewProject}
         onOpenFolderHub={() => setShowFolderHub(true)}
+        onToggleSidebar={() => setMobileSidebarOpen((prev) => !prev)}
       />
 
       {/* Main Workspace Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left Workflow Pipeline Sidebar */}
-        <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
+        <Sidebar
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+          mobileOpen={mobileSidebarOpen}
+          onCloseMobile={() => setMobileSidebarOpen(false)}
+        />
 
         {/* Central Dynamic Workspace Panel */}
         <main
-          className="flex-1 relative flex flex-col overflow-hidden transition-colors"
+          className="flex-1 relative flex flex-col overflow-hidden transition-colors min-w-0"
           style={{ background: "var(--color-bg)" }}
         >
           {renderActiveWorkspace()}
@@ -178,7 +186,7 @@ export default function App() {
 
         {/* Right Sidebar Inspector Panel - Synchronized with Active Project */}
         <aside
-          className="w-80 border-l flex flex-col flex-shrink-0 overflow-y-auto p-4 gap-4 transition-colors"
+          className="hidden lg:flex w-72 xl:w-80 border-l flex-col flex-shrink-0 overflow-y-auto p-4 gap-4 transition-colors"
           style={{ background: "var(--color-sidebar-bg)", borderColor: "var(--color-border)" }}
         >
           <div className="rounded-lg p-3 transition-colors" style={{ background: "var(--color-card-bg)", border: "1px solid var(--color-border)" }}>
