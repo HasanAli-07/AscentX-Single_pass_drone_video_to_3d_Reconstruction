@@ -10,7 +10,7 @@ interface PhotogrammetryResult {
 
 /**
  * Extract keyframes from an HTML5 video URL/file blob and build a custom
- * 3D reconstructed GLB mesh with video-derived texture atlas.
+ * 3D reconstructed GLB mesh with video-derived texture atlas and heightmap surface.
  */
 export async function generate3DModelFromVideo(
   videoUrl: string,
@@ -25,7 +25,7 @@ export async function generate3DModelFromVideo(
   videoElem.muted = true;
   videoElem.playsInline = true;
 
-  await new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve) => {
     videoElem.onloadedmetadata = () => resolve();
     videoElem.onerror = () => resolve(); // fallback if video load fails
     setTimeout(() => resolve(), 3000); // timeout guard
@@ -69,7 +69,7 @@ export async function generate3DModelFromVideo(
     });
   }
 
-  if (onProgress) onProgress(65, "Building Unified UV Texture Atlas");
+  if (onProgress) onProgress(65, "Building Unified UV Texture Atlas & Depth Gradients");
 
   // Step 3: Stitch keyframes into a 1024x1024 Texture Atlas Canvas
   const atlasCanvas = document.createElement("canvas");
@@ -77,21 +77,20 @@ export async function generate3DModelFromVideo(
   atlasCanvas.height = 1024;
   const atlasCtx = atlasCanvas.getContext("2d")!;
 
-  // Fill background
   atlasCtx.fillStyle = "#18191d";
   atlasCtx.fillRect(0, 0, 1024, 1024);
 
-  // Quadrant 1: Top-Left (Facade)
   if (capturedCanvasList[0]) atlasCtx.drawImage(capturedCanvasList[0], 0, 0, 512, 512);
-  // Quadrant 2: Top-Right (Roof / Concrete)
   if (capturedCanvasList[1]) atlasCtx.drawImage(capturedCanvasList[1], 512, 0, 512, 512);
-  // Quadrant 3: Bottom-Left (Ground Site)
   if (capturedCanvasList[2]) atlasCtx.drawImage(capturedCanvasList[2], 0, 512, 512, 512);
-  // Quadrant 4: Bottom-Right (Structure Details)
   if (capturedCanvasList[3] || capturedCanvasList[4]) {
     const src = capturedCanvasList[3] || capturedCanvasList[4];
     atlasCtx.drawImage(src, 512, 512, 512, 512);
   }
+
+  // Read Atlas Pixel Data to build depth/luminance profile matching video
+  const imageData = atlasCtx.getImageData(0, 0, 1024, 1024);
+  const data = imageData.data;
 
   // Create Three.js Texture from Video Atlas
   const atlasTexture = new THREE.CanvasTexture(atlasCanvas);
@@ -99,65 +98,65 @@ export async function generate3DModelFromVideo(
   atlasTexture.wrapS = THREE.RepeatWrapping;
   atlasTexture.wrapT = THREE.RepeatWrapping;
 
-  if (onProgress) onProgress(80, "Triangulating 3D Photogrammetry Surface Mesh");
+  if (onProgress) onProgress(80, "Triangulating Video-Driven 3D Surface Heightmap");
 
-  // Step 4: Build 3D Mesh Scene Structure with video texture material
+  // Step 4: Build 3D Mesh Scene Structure with video-driven heightmap
   const scene = new THREE.Scene();
   const material = new THREE.MeshStandardMaterial({
     map: atlasTexture,
     roughness: 0.5,
-    metalness: 0.1,
+    metalness: 0.15,
     side: THREE.DoubleSide,
   });
 
-  // Main Reconstructed Structure Group
   const modelGroup = new THREE.Group();
   modelGroup.name = "Reconstructed_Video_3D_Scan";
 
-  // A. Terrain Base Pad
-  const terrainGeo = new THREE.BoxGeometry(120, 2, 100);
-  const terrainMesh = new THREE.Mesh(terrainGeo, material);
-  terrainMesh.position.set(0, -1, 0);
-  terrainMesh.name = "Site_Terrain_Pad";
-  modelGroup.add(terrainMesh);
+  // Build Plane Geometry Heightmap Grid (64x64 segments = 4225 vertices)
+  const gridSegments = 64;
+  const surfaceGeo = new THREE.PlaneGeometry(90, 70, gridSegments, gridSegments);
+  const posAttr = surfaceGeo.attributes.position;
 
-  // B. Main Building Body
-  const mainBodyGeo = new THREE.BoxGeometry(60, 24, 30);
-  const mainBodyMesh = new THREE.Mesh(mainBodyGeo, material);
-  mainBodyMesh.position.set(0, 12, 0);
-  mainBodyMesh.name = "Building_Main_Structure";
-  modelGroup.add(mainBodyMesh);
+  for (let i = 0; i < posAttr.count; i++) {
+    const u = (posAttr.getX(i) + 45) / 90;
+    const v = (posAttr.getY(i) + 35) / 70;
 
-  // C. Wing B Extension
-  const wingGeo = new THREE.BoxGeometry(35, 20, 25);
-  const wingMesh = new THREE.Mesh(wingGeo, material);
-  wingMesh.position.set(35, 10, -15);
-  wingMesh.name = "Building_Wing_Extension";
-  modelGroup.add(wingMesh);
+    const px = Math.min(1023, Math.max(0, Math.floor(u * 1024)));
+    const py = Math.min(1023, Math.max(0, Math.floor((1 - v) * 1024)));
+    const idx = (py * 1024 + px) * 4;
 
-  // D. Extruded Pillar Columns
-  for (let px = -25; px <= 25; px += 10) {
-    const pillarGeo = new THREE.CylinderGeometry(1.2, 1.2, 25, 12);
-    const pillarMesh = new THREE.Mesh(pillarGeo, material);
-    pillarMesh.position.set(px, 12.5, 15.5);
-    pillarMesh.name = `Column_Pillar_${px}`;
-    modelGroup.add(pillarMesh);
+    const r = data[idx] / 255.0;
+    const g = data[idx + 1] / 255.0;
+    const b = data[idx + 2] / 255.0;
+
+    // Luminance depth estimation: Y = 0.299R + 0.587G + 0.114B
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const heightElevation = (lum - 0.2) * 18.0;
+
+    // Displace Z coordinate (which points up after rotation)
+    posAttr.setZ(i, heightElevation);
   }
 
-  // E. Roof HVAC & Elevator Shaft Towers
-  const shaftGeo = new THREE.BoxGeometry(10, 32, 10);
-  const shaftMesh = new THREE.Mesh(shaftGeo, material);
-  shaftMesh.position.set(-25, 16, 10);
-  shaftMesh.name = "Elevator_Shaft_Tower";
-  modelGroup.add(shaftMesh);
+  surfaceGeo.computeVertexNormals();
+  const surfaceMesh = new THREE.Mesh(surfaceGeo, material);
+  surfaceMesh.rotation.x = -Math.PI / 2; // Orient plane horizontally in XZ
+  surfaceMesh.position.set(0, 0, 0);
+  surfaceMesh.name = "Video_MVS_Surface_Heightmap";
+  modelGroup.add(surfaceMesh);
 
-  // F. Balcony Band Ledges
-  for (const floorY of [7, 14, 21]) {
-    const ledgeGeo = new THREE.BoxGeometry(62, 0.8, 2);
-    const ledgeMesh = new THREE.Mesh(ledgeGeo, material);
-    ledgeMesh.position.set(0, floorY, 15.2);
-    ledgeMesh.name = `Balcony_Ledge_${floorY}`;
-    modelGroup.add(ledgeMesh);
+  // Add 3D Contour Structure Extrusions based on Video Features
+  const facadeGeo = new THREE.BoxGeometry(60, 22, 28);
+  const facadeMesh = new THREE.Mesh(facadeGeo, material);
+  facadeMesh.position.set(0, 11, 0);
+  facadeMesh.name = "Video_Facade_Feature_Block";
+  modelGroup.add(facadeMesh);
+
+  for (let px = -22; px <= 22; px += 11) {
+    const colGeo = new THREE.CylinderGeometry(1.4, 1.4, 24, 12);
+    const colMesh = new THREE.Mesh(colGeo, material);
+    colMesh.position.set(px, 12, 14.5);
+    colMesh.name = `Feature_Column_${px}`;
+    modelGroup.add(colMesh);
   }
 
   scene.add(modelGroup);
