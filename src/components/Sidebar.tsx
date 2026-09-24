@@ -20,12 +20,13 @@ export function Sidebar({ activeSection, setActiveSection }: SidebarProps) {
   ];
 
   return (
-    <aside className="w-56 border-r flex flex-col flex-shrink-0" style={{ background: "#131418", borderColor: "#2a2b31" }}>
-      <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: "#1f2025" }}>
-        <span className="stat-label" style={{ color: "#4a4d5a" }}>WORKFLOW PIPELINE</span>
+    <aside className="w-56 border-r flex flex-col flex-shrink-0 transition-colors" style={{ background: "var(--color-sidebar-bg)", borderColor: "var(--color-border)" }}>
+      <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: "var(--color-border-subtle)" }}>
+        <span className="stat-label" style={{ color: "var(--color-text-dim)" }}>WORKFLOW PIPELINE</span>
         <button
           onClick={() => setActiveSection("project")}
-          className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 text-[9px] font-mono cursor-pointer"
+          className="px-2 py-0.5 rounded text-[9px] font-mono cursor-pointer transition-colors"
+          style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
         >
           📂 FOLDER
         </button>
@@ -39,17 +40,17 @@ export function Sidebar({ activeSection, setActiveSection }: SidebarProps) {
               onClick={() => setActiveSection(s.id)}
               className="w-full flex items-center justify-between px-3 py-2.5 transition-colors cursor-pointer"
               style={{
-                background: isActive ? "#00c8d410" : "transparent",
-                borderLeft: isActive ? "3px solid #00c8d4" : "3px solid transparent",
+                background: isActive ? "var(--color-cyan-dim)" : "transparent",
+                borderLeft: isActive ? "3px solid var(--color-cyan)" : "3px solid transparent",
               }}
             >
               <div className="flex items-center gap-2.5">
-                <span style={{ color: isActive ? "#00c8d4" : "#3a3d4a", fontFamily: "JetBrains Mono, monospace", fontSize: 9 }}>
+                <span style={{ color: isActive ? "var(--color-cyan)" : "var(--color-text-dim)", fontFamily: "JetBrains Mono, monospace", fontSize: 9 }}>
                   {s.num}
                 </span>
                 <span
                   style={{
-                    color: isActive ? "#e2e4ea" : "#6a6d7a",
+                    color: isActive ? "var(--color-text)" : "var(--color-text-muted)",
                     fontFamily: "JetBrains Mono, monospace",
                     fontSize: 11,
                     fontWeight: isActive ? 600 : 400,
@@ -59,7 +60,7 @@ export function Sidebar({ activeSection, setActiveSection }: SidebarProps) {
                   {s.label}
                 </span>
               </div>
-              {isActive && <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#00c8d4" }} />}
+              {isActive && <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-cyan)" }} />}
             </button>
           );
         })}

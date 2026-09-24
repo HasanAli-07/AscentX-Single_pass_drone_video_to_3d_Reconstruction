@@ -27,6 +27,10 @@ export default function App() {
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [autoStartTrigger, setAutoStartTrigger] = useState<number>(0);
   const [showFolderHub, setShowFolderHub] = useState<boolean>(false);
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("ascentx_theme") as "dark" | "light") || "dark";
+  });
+
   const [reconstructionState, setReconstructionState] = useState<ReconstructionState>({
     isRunning: false,
     isPaused: false,
@@ -35,6 +39,15 @@ export default function App() {
     progress: 0,
     logs: [],
   });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("ascentx_theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
 
   const refreshProjectList = () => {
     fetchProjects().then((list) => {
@@ -118,13 +131,22 @@ export default function App() {
       case "measurements":
       case "reports":
       default:
-        return <ThreeGLBViewer displayMode={displayMode} activeToggles={activeToggles} activeProject={activeProject} />;
-
+        return (
+          <ThreeGLBViewer
+            displayMode={displayMode}
+            activeToggles={activeToggles}
+            activeProject={activeProject}
+            theme={theme}
+          />
+        );
     }
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden text-slate-200" style={{ background: "#0d0e11" }}>
+    <div
+      className="w-screen h-screen flex flex-col overflow-hidden transition-colors"
+      style={{ background: "var(--color-bg)", color: "var(--color-text)" }}
+    >
       {/* Header Bar */}
       <Header
         projects={projects}
@@ -134,6 +156,8 @@ export default function App() {
         setDisplayMode={setDisplayMode}
         activeToggles={activeToggles}
         toggleView={toggleView}
+        theme={theme}
+        toggleTheme={toggleTheme}
         onExport={() => setActiveSection("export")}
         onNewProject={handleCreateNewProject}
         onOpenFolderHub={() => setShowFolderHub(true)}
@@ -145,15 +169,21 @@ export default function App() {
         <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
 
         {/* Central Dynamic Workspace Panel */}
-        <main className="flex-1 relative flex flex-col overflow-hidden bg-[#0d0e11]">
+        <main
+          className="flex-1 relative flex flex-col overflow-hidden transition-colors"
+          style={{ background: "var(--color-bg)" }}
+        >
           {renderActiveWorkspace()}
         </main>
 
         {/* Right Sidebar Inspector Panel - Synchronized with Active Project */}
-        <aside className="w-80 border-l flex flex-col flex-shrink-0 overflow-y-auto p-4 gap-4" style={{ background: "#131418", borderColor: "#2a2b31" }}>
-          <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
+        <aside
+          className="w-80 border-l flex flex-col flex-shrink-0 overflow-y-auto p-4 gap-4 transition-colors"
+          style={{ background: "var(--color-sidebar-bg)", borderColor: "var(--color-border)" }}
+        >
+          <div className="rounded-lg p-3 transition-colors" style={{ background: "var(--color-card-bg)", border: "1px solid var(--color-border)" }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="stat-label text-slate-400 font-semibold">ACTIVE PROJECT METRICS</span>
+              <span className="stat-label font-semibold" style={{ color: "var(--color-text-muted)" }}>ACTIVE PROJECT METRICS</span>
               <Badge label={apiConnected ? "API ONLINE" : "STANDALONE"} variant={apiConnected ? "ok" : "warn"} />
             </div>
             <StatRow label="Project Name" value={activeProject?.name || "Unassigned"} accent />
@@ -168,7 +198,7 @@ export default function App() {
             <StatRow label="Dense Cloud" value={activeProject?.dense_points ? `${(activeProject.dense_points / 1000000).toFixed(1)}M pts` : "0 pts"} accent={!!activeProject?.dense_points} />
           </div>
 
-          <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
+          <div className="rounded-lg p-3 transition-colors" style={{ background: "var(--color-card-bg)", border: "1px solid var(--color-border)" }}>
             <SectionHeader title="STAGE QUICK CONTROLS" />
             <div className="flex flex-col gap-2 mt-2">
               <Btn label="01 EDIT PROJECT DETAILS" variant="secondary" onClick={() => setActiveSection("project")} />
@@ -180,21 +210,21 @@ export default function App() {
             </div>
           </div>
 
-          <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
+          <div className="rounded-lg p-3 transition-colors" style={{ background: "var(--color-card-bg)", border: "1px solid var(--color-border)" }}>
             <SectionHeader title="RECONSTRUCTION CONFIDENCE" />
             <div className="flex flex-col gap-2 mt-2">
               {[
-                { label: "HIGH COVERAGE", pct: 74, color: "#22c55e" },
-                { label: "MEDIUM COVERAGE", pct: 18, color: "#f59e0b" },
-                { label: "LOW COVERAGE", pct: 5, color: "#ef4444" },
-                { label: "INSUFFICIENT", pct: 3, color: "#7a3d7a" },
+                { label: "HIGH COVERAGE", pct: 74, color: "var(--color-success)" },
+                { label: "MEDIUM COVERAGE", pct: 18, color: "var(--color-warning)" },
+                { label: "LOW COVERAGE", pct: 5, color: "var(--color-danger)" },
+                { label: "INSUFFICIENT", pct: 3, color: "var(--color-text-dim)" },
               ].map((c) => (
                 <div key={c.label}>
-                  <div className="flex justify-between items-center mb-1" style={{ fontSize: 10, color: "#6a6d7a", fontFamily: "JetBrains Mono, monospace" }}>
+                  <div className="flex justify-between items-center mb-1" style={{ fontSize: 10, color: "var(--color-text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
                     <span>{c.label}</span>
                     <span style={{ color: c.color }}>{c.pct}%</span>
                   </div>
-                  <div className="h-1 rounded" style={{ background: "#1e1f24" }}>
+                  <div className="h-1 rounded" style={{ background: "var(--color-panel-bg)" }}>
                     <div className="h-1 rounded" style={{ width: `${c.pct}%`, background: c.color }} />
                   </div>
                 </div>
@@ -221,4 +251,3 @@ export default function App() {
     </div>
   );
 }
-

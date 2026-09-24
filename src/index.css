@@ -9,24 +9,77 @@ body,
   overflow: hidden;
 }
 
-@theme inline {
-  --color-background: #111214;
-  --color-surface: #18191d;
-  --color-panel: #1e1f24;
+:root,
+[data-theme='dark'] {
+  --color-bg: #0d0e11;
+  --color-header-bg: #131418;
+  --color-sidebar-bg: #131418;
+  --color-card-bg: #18191d;
+  --color-panel-bg: #1e1f24;
   --color-panel-alt: #242529;
+  --color-input-bg: #131418;
   --color-border: #2a2b31;
   --color-border-subtle: #1f2025;
-  --color-cyan: #00c8d4;
-  --color-cyan-dim: #00c8d430;
-  --color-cyan-hover: #00e0ee;
   --color-text: #e2e4ea;
+  --color-text-subtle: #cbd5e1;
   --color-text-muted: #7a7d8a;
   --color-text-dim: #4a4d5a;
+  --color-cyan: #00c8d4;
+  --color-cyan-hover: #00e0ee;
+  --color-cyan-dim: rgba(0, 200, 212, 0.15);
   --color-accent: #3d7fff;
-  --color-accent-dim: #3d7fff25;
+  --color-accent-dim: rgba(61, 127, 255, 0.15);
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+  --grid-line: rgba(255, 255, 255, 0.025);
+  --scrollbar-thumb: #2a2b31;
+}
+
+[data-theme='light'] {
+  --color-bg: #f8fafc;
+  --color-header-bg: #ffffff;
+  --color-sidebar-bg: #ffffff;
+  --color-card-bg: #ffffff;
+  --color-panel-bg: #f1f5f9;
+  --color-panel-alt: #e2e8f0;
+  --color-input-bg: #f8fafc;
+  --color-border: #cbd5e1;
+  --color-border-subtle: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-subtle: #334155;
+  --color-text-muted: #475569;
+  --color-text-dim: #64748b;
+  --color-cyan: #0284c7;
+  --color-cyan-hover: #0369a1;
+  --color-cyan-dim: rgba(2, 132, 199, 0.12);
+  --color-accent: #2563eb;
+  --color-accent-dim: rgba(37, 99, 235, 0.12);
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --grid-line: rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: #cbd5e1;
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-surface: var(--color-card-bg);
+  --color-panel: var(--color-panel-bg);
+  --color-panel-alt: var(--color-panel-alt);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-cyan: var(--color-cyan);
+  --color-cyan-dim: var(--color-cyan-dim);
+  --color-cyan-hover: var(--color-cyan-hover);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-dim: var(--color-text-dim);
+  --color-accent: var(--color-accent);
+  --color-accent-dim: var(--color-accent-dim);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -36,32 +89,33 @@ body,
 }
 
 body {
-  background: #111214;
-  color: #e2e4ea;
+  background-color: var(--color-bg);
+  color: var(--color-text);
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2b31;
-  border-radius: 2px;
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3b42;
+  background: var(--color-text-dim);
 }
 
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
-  height: 3px;
-  background: #2a2b31;
+  height: 4px;
+  background: var(--color-border);
   border-radius: 2px;
   outline: none;
 }
@@ -71,19 +125,19 @@ input[type='range']::-webkit-slider-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #00c8d4;
+  background: var(--color-cyan);
   cursor: pointer;
-  border: 2px solid #111214;
-  box-shadow: 0 0 6px #00c8d460;
+  border: 2px solid var(--color-bg);
+  box-shadow: 0 0 6px var(--color-cyan-dim);
 }
 input[type='range']::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, #00c8d4 var(--progress, 50%), #2a2b31 var(--progress, 50%));
+  background: linear-gradient(to right, var(--color-cyan) var(--progress, 50%), var(--color-border) var(--progress, 50%));
   border-radius: 2px;
-  height: 3px;
+  height: 4px;
 }
 
 .mesh-glow {
-  filter: drop-shadow(0 0 12px rgba(0, 200, 212, 0.25));
+  filter: drop-shadow(0 0 12px var(--color-cyan-dim));
 }
 
 @keyframes pulse-dot {
@@ -120,7 +174,7 @@ input[type='range']::-webkit-slider-runnable-track {
 
 .viewport-grid {
   background-image:
-    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 40px 40px;
 }

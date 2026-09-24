@@ -10,11 +10,12 @@ interface ThreeGLBViewerProps {
   displayMode: DisplayMode;
   activeToggles: Set<ViewToggle>;
   activeProject?: Project | null;
+  theme?: "dark" | "light";
 }
 
 export type QualityPreset = "ULTRA_LOW" | "LOW" | "BALANCED" | "HIGH";
 
-export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: ThreeGLBViewerProps) {
+export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, theme = "dark" }: ThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -315,14 +316,31 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     }
   }, [qualityPreset]);
 
-  // Toggle Grid / Axes
+  // Dynamic Theme Background & Grid Update
   useEffect(() => {
-    if (!sceneRef.current) return;
-    const grid = sceneRef.current.getObjectByName("grid");
-    if (grid) grid.visible = activeToggles.has("grid");
-    const axes = sceneRef.current.getObjectByName("axes");
-    if (axes) axes.visible = activeToggles.has("axes");
-  }, [activeToggles]);
+    if (!sceneRef.current || !rendererRef.current) return;
+    const isLight = theme === "light";
+    const bgHex = isLight ? 0xf1f5f9 : 0x0d0e11;
+    const gridPrimary = isLight ? 0x0284c7 : 0x00c8d4;
+    const gridSecondary = isLight ? 0xcbd5e1 : 0x1c1e24;
+
+    sceneRef.current.background = new THREE.Color(bgHex);
+    rendererRef.current.setClearColor(new THREE.Color(bgHex), 1.0);
+
+    if (rendererRef.current.domElement) {
+      rendererRef.current.domElement.style.backgroundColor = isLight ? "#f1f5f9" : "#0d0e11";
+    }
+
+    const oldGrid = sceneRef.current.getObjectByName("grid");
+    if (oldGrid) {
+      sceneRef.current.remove(oldGrid);
+      const newGrid = new THREE.GridHelper(300, 60, gridPrimary, gridSecondary);
+      newGrid.position.y = -0.1;
+      newGrid.name = "grid";
+      newGrid.visible = activeToggles.has("grid");
+      sceneRef.current.add(newGrid);
+    }
+  }, [theme, activeToggles]);
 
   // Auto-Frame Camera Target on Bounding Center
   const fitCameraToModel = (object: THREE.Object3D) => {
@@ -625,15 +643,15 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#0d0e11] overflow-hidden" style={{ background: "#0d0e11" }}>
+    <div className="relative w-full h-full flex flex-col overflow-hidden transition-colors" style={{ background: "var(--color-bg)" }}>
       {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing bg-[#0d0e11]" style={{ background: "#0d0e11" }} />
+      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" style={{ background: "var(--color-bg)" }} />
 
       {/* WebGL Context Loss Banner */}
       {webglContextLost && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0e11]/95 z-30 p-6 text-center">
-          <span className="text-amber-400 text-sm font-mono font-bold mb-2">⚠️ WEBGL CONTEXT LOST DETECTED</span>
-          <p className="text-slate-300 text-xs font-mono max-w-md mb-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 p-6 text-center backdrop-blur" style={{ background: "var(--color-bg)" }}>
+          <span className="text-amber-500 text-sm font-mono font-bold mb-2">⚠️ WEBGL CONTEXT LOST DETECTED</span>
+          <p className="text-xs font-mono max-w-md mb-4" style={{ color: "var(--color-text-muted)" }}>
             GPU memory limit reached on low configuration device. Re-initializing lightweight rendering mode...
           </p>
           <button
@@ -641,7 +659,8 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
               setWebglContextLost(false);
               setQualityPreset("ULTRA_LOW");
             }}
-            className="px-4 py-2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-xs font-mono hover:bg-cyan-500/30 cursor-pointer"
+            className="px-4 py-2 rounded text-xs font-mono cursor-pointer"
+            style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
           >
             FORCE RECOVERY (ULTRA LOW SPEC)
           </button>
@@ -650,17 +669,17 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
       {/* Loading Overlay */}
       {loadingModel && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0e11]/90 z-20">
-          <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3" />
-          <span className="text-cyan-400 text-xs font-mono font-semibold">OPTIMIZING & LOADING 3D MODEL ({loadProgress}%)...</span>
-          <span className="text-slate-400 text-[10px] font-mono mt-1">{selectedModelName}</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 backdrop-blur" style={{ background: "var(--color-bg)" }}>
+          <div className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin mb-3" style={{ borderColor: "var(--color-cyan)", borderTopColor: "transparent" }} />
+          <span className="text-xs font-mono font-semibold" style={{ color: "var(--color-cyan)" }}>OPTIMIZING & LOADING 3D MODEL ({loadProgress}%)...</span>
+          <span className="text-[10px] font-mono mt-1" style={{ color: "var(--color-text-muted)" }}>{selectedModelName}</span>
         </div>
       )}
 
       {/* Top Left Model Selector & Performance Meter */}
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-        <div className="flex items-center gap-2 p-1.5 rounded bg-[#18191d]/90 border border-[#2a2b31] backdrop-blur shadow-lg">
-          <span className="text-[10px] font-mono text-slate-400">ACTIVE 3D MODEL:</span>
+        <div className="flex items-center gap-2 p-1.5 rounded backdrop-blur shadow-lg border" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)" }}>
+          <span className="text-[10px] font-mono" style={{ color: "var(--color-text-muted)" }}>ACTIVE 3D MODEL:</span>
           <select
             value={selectedModelUrl}
             onChange={(e) => {
@@ -670,7 +689,8 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
                 setSelectedModelName(chosen.name);
               }
             }}
-            className="bg-[#131418] text-cyan-400 text-xs font-mono px-2 py-1 rounded border border-[#2a2b31] outline-none cursor-pointer max-w-xs truncate"
+            className="text-xs font-mono px-2 py-1 rounded border outline-none cursor-pointer max-w-xs truncate"
+            style={{ background: "var(--color-input-bg)", color: "var(--color-cyan)", borderColor: "var(--color-border)" }}
           >
             {sourceModels.map((m) => (
               <option key={m.download_url} value={m.download_url}>
@@ -681,23 +701,24 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
 
           <button
             onClick={() => loadedModelRef.current && fitCameraToModel(loadedModelRef.current)}
-            className="px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[9px] font-mono hover:bg-cyan-500/30 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded text-[9px] font-mono transition-colors cursor-pointer"
+            style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
           >
             🎯 FIT TO SCREEN
           </button>
         </div>
 
         {/* Real-time FPS & Model Statistics Badge */}
-        <div className="flex items-center gap-3 px-2.5 py-1 rounded bg-[#18191d]/90 border border-[#2a2b31] text-[9px] font-mono text-slate-400 backdrop-blur w-fit shadow-md">
-          <span className="text-cyan-400 font-bold">{selectedModelName}</span>
-          <span>FPS: <strong className={currentFps < 30 ? "text-amber-400 font-bold" : "text-emerald-400"}>{currentFps}</strong></span>
+        <div className="flex items-center gap-3 px-2.5 py-1 rounded border text-[9px] font-mono backdrop-blur w-fit shadow-md" style={{ background: "var(--color-card-bg)", borderColor: "var(--color-border)", color: "var(--color-text-muted)" }}>
+          <span className="font-bold" style={{ color: "var(--color-cyan)" }}>{selectedModelName}</span>
+          <span>FPS: <strong className={currentFps < 30 ? "text-amber-500 font-bold" : "text-emerald-500"}>{currentFps}</strong></span>
           {modelStats && (
             <>
-              <span>VERTS: <strong className="text-emerald-400">{modelStats.vertices.toLocaleString()}</strong></span>
-              <span>FACES: <strong className="text-indigo-400">{modelStats.faces.toLocaleString()}</strong></span>
+              <span>VERTS: <strong className="text-emerald-500">{modelStats.vertices.toLocaleString()}</strong></span>
+              <span>FACES: <strong className="text-indigo-500">{modelStats.faces.toLocaleString()}</strong></span>
             </>
           )}
-          <span>MAX TEX: <strong className="text-cyan-400">{maxTextureSize}px</strong></span>
+          <span>MAX TEX: <strong style={{ color: "var(--color-cyan)" }}>{maxTextureSize}px</strong></span>
         </div>
       </div>
 

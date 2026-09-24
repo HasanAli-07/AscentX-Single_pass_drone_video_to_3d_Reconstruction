@@ -9,6 +9,8 @@ interface HeaderProps {
   setDisplayMode: (m: DisplayMode) => void;
   activeToggles: Set<ViewToggle>;
   toggleView: (t: ViewToggle) => void;
+  theme: "dark" | "light";
+  toggleTheme: () => void;
   onExport: () => void;
   onNewProject: () => void;
   onOpenFolderHub: () => void;
@@ -22,6 +24,8 @@ export function Header({
   setDisplayMode,
   activeToggles,
   toggleView,
+  theme,
+  toggleTheme,
   onExport,
   onNewProject,
   onOpenFolderHub,
@@ -37,27 +41,28 @@ export function Header({
   ];
 
   return (
-    <header className="h-12 border-b flex items-center justify-between px-4 flex-shrink-0" style={{ background: "#131418", borderColor: "#2a2b31" }}>
+    <header className="h-12 border-b flex items-center justify-between px-4 flex-shrink-0 transition-colors" style={{ background: "var(--color-header-bg)", borderColor: "var(--color-border)" }}>
       {/* Left branding & Project Selector */}
       <div className="flex items-center gap-3 font-mono">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="text-slate-100 font-extrabold text-sm tracking-widest">
+          <div className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" />
+          <span className="font-extrabold text-sm tracking-widest" style={{ color: "var(--color-text)" }}>
             ASCENTX
           </span>
         </div>
-        <div className="h-4 w-px bg-[#2a2b31]" />
+        <div className="h-4 w-px" style={{ background: "var(--color-border)" }} />
         
         {/* Project Selector Dropdown */}
-        <div className="flex items-center gap-2 bg-[#18191d] px-2 py-1 rounded border border-[#2a2b31]">
-          <span className="text-[10px] text-slate-400 font-semibold">PROJECT:</span>
+        <div className="flex items-center gap-2 px-2 py-1 rounded border" style={{ background: "var(--color-panel-bg)", borderColor: "var(--color-border)" }}>
+          <span className="text-[10px] font-semibold" style={{ color: "var(--color-text-muted)" }}>PROJECT:</span>
           <select
             value={activeProject?.id || ""}
             onChange={(e) => {
               const selected = projects.find((p) => p.id === e.target.value);
               if (selected) onSelectProject(selected);
             }}
-            className="bg-[#131418] text-cyan-400 text-xs font-semibold px-2 py-0.5 rounded border border-[#2a2b31] outline-none cursor-pointer"
+            className="text-xs font-semibold px-2 py-0.5 rounded border outline-none cursor-pointer"
+            style={{ background: "var(--color-input-bg)", color: "var(--color-cyan)", borderColor: "var(--color-border)" }}
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -67,7 +72,8 @@ export function Header({
           </select>
           <button
             onClick={onOpenFolderHub}
-            className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30 text-[10px] font-bold cursor-pointer flex items-center gap-1 transition-colors"
+            className="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer flex items-center gap-1 transition-colors"
+            style={{ background: "var(--color-cyan-dim)", color: "var(--color-cyan)", border: "1px solid var(--color-cyan)" }}
           >
             <span>📂</span> FOLDERS
           </button>
@@ -77,18 +83,19 @@ export function Header({
       </div>
 
       {/* Middle display modes */}
-      <div className="flex items-center gap-1 p-0.5 rounded" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
+      <div className="flex items-center gap-1 p-0.5 rounded" style={{ background: "var(--color-panel-bg)", border: "1px solid var(--color-border)" }}>
         {modes.map((m) => (
           <button
             key={m}
             onClick={() => setDisplayMode(m)}
-            className="px-2.5 py-1 rounded text-xs transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded text-xs transition-all cursor-pointer"
             style={{
-              background: displayMode === m ? "#00c8d420" : "transparent",
-              color: displayMode === m ? "#00c8d4" : "#5a5d6a",
+              background: displayMode === m ? "var(--color-cyan-dim)" : "transparent",
+              color: displayMode === m ? "var(--color-cyan)" : "var(--color-text-muted)",
               fontFamily: "JetBrains Mono, monospace",
               fontSize: 10,
-              border: displayMode === m ? "1px solid #00c8d440" : "1px solid transparent",
+              border: displayMode === m ? "1px solid var(--color-cyan)" : "1px solid transparent",
+              fontWeight: displayMode === m ? 600 : 400,
             }}
           >
             {m}
@@ -96,7 +103,7 @@ export function Header({
         ))}
       </div>
 
-      {/* View toggles & export */}
+      {/* View toggles, Theme Switcher & export */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1">
           {toggles.map((t) => (
@@ -105,18 +112,35 @@ export function Header({
               onClick={() => toggleView(t.id)}
               className="px-2 py-1 rounded text-xs transition-colors cursor-pointer"
               style={{
-                background: activeToggles.has(t.id) ? "#3d7fff18" : "#18191d",
-                color: activeToggles.has(t.id) ? "#3d7fff" : "#4a4d5a",
+                background: activeToggles.has(t.id) ? "var(--color-accent-dim)" : "var(--color-panel-bg)",
+                color: activeToggles.has(t.id) ? "var(--color-accent)" : "var(--color-text-dim)",
                 fontFamily: "JetBrains Mono, monospace",
                 fontSize: 9,
-                border: activeToggles.has(t.id) ? "1px solid #3d7fff30" : "1px solid #2a2b31",
+                border: activeToggles.has(t.id) ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
               }}
             >
               {t.label}
             </button>
           ))}
         </div>
-        <div className="h-4 w-px" style={{ background: "#2a2b31" }} />
+
+        <div className="h-4 w-px" style={{ background: "var(--color-border)" }} />
+
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+          className="px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          style={{
+            background: "var(--color-panel-bg)",
+            color: theme === "light" ? "#d97706" : "#f59e0b",
+            border: "1px solid var(--color-border)",
+          }}
+        >
+          <span>{theme === "dark" ? "☀️ LIGHT" : "🌙 DARK"}</span>
+        </button>
+
+        <div className="h-4 w-px" style={{ background: "var(--color-border)" }} />
         <Btn label="➕ NEW SCAN" variant="ghost" onClick={onNewProject} />
         <Btn label="EXPORT 3D" variant="primary" onClick={onExport} />
       </div>

@@ -72,31 +72,31 @@ export function Console({ activeProject, reconstructionState }: ConsoleProps) {
   return (
     <footer
       className="border-t flex flex-col transition-all flex-shrink-0"
-      style={{ background: "#131418", borderColor: "#2a2b31", height: expanded ? 180 : 36 }}
+      style={{ background: "var(--color-header-bg)", borderColor: "var(--color-border)", height: expanded ? 180 : 36 }}
     >
       {/* Console top bar */}
       <div className="h-9 px-4 flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded((e) => !e)}>
         <div className="flex items-center gap-3">
-          <span className="stat-label" style={{ color: "#4a4d5a" }}>PROCESSING CONSOLE</span>
+          <span className="stat-label" style={{ color: "var(--color-text-dim)" }}>PROCESSING CONSOLE</span>
           {renderBadge()}
-          <span style={{ color: "#5a5d6a", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }} className="truncate max-w-md">
+          <span style={{ color: "var(--color-text-muted)", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }} className="truncate max-w-md">
             {statusSubtext()}
           </span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="stat-label" style={{ color: "#3a3d4a" }}>GPU</span>
-            <span style={{ color: reconstructionState?.isRunning ? "#22c55e" : "#00c8d4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
+            <span className="stat-label" style={{ color: "var(--color-text-dim)" }}>GPU</span>
+            <span style={{ color: reconstructionState?.isRunning ? "var(--color-success)" : "var(--color-cyan)", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
               {reconstructionState?.isRunning ? "78%" : "12%"}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="stat-label" style={{ color: "#3a3d4a" }}>VRAM</span>
-            <span style={{ color: "#00c8d4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
+            <span className="stat-label" style={{ color: "var(--color-text-dim)" }}>VRAM</span>
+            <span style={{ color: "var(--color-cyan)", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
               {reconstructionState?.isRunning ? "4.2 GB / 8.0 GB" : "1.1 GB / 8.0 GB"}
             </span>
           </div>
-          <span className="stat-label" style={{ color: expanded ? "#00c8d4" : "#4a4d5a" }}>
+          <span className="stat-label" style={{ color: expanded ? "var(--color-cyan)" : "var(--color-text-dim)" }}>
             {expanded ? "▼ COLLAPSE" : `▲ LOGS (${displayLogs.length})`}
           </span>
         </div>
@@ -104,9 +104,9 @@ export function Console({ activeProject, reconstructionState }: ConsoleProps) {
 
       {/* Expanded terminal log output */}
       {expanded && (
-        <div className="flex-1 p-3 overflow-y-auto font-mono text-xs border-t flex flex-col" style={{ background: "#0d0e11", borderColor: "#1f2025" }}>
+        <div className="flex-1 p-3 overflow-y-auto font-mono text-xs border-t flex flex-col" style={{ background: "var(--color-bg)", borderColor: "var(--color-border-subtle)" }}>
           {displayLogs.map((log, idx) => (
-            <div key={idx} className="py-0.5" style={{ color: "#7a7d8a", fontSize: 11 }}>
+            <div key={idx} className="py-0.5" style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
               {log}
             </div>
           ))}
@@ -116,4 +116,3 @@ export function Console({ activeProject, reconstructionState }: ConsoleProps) {
     </footer>
   );
 }
-
