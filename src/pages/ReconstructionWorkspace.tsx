@@ -72,10 +72,15 @@ export function ReconstructionWorkspace({
       onUpdateProject({ ...project, status: "RECONSTRUCTING" });
     }
 
-    await startReconstructionJob(project.id);
-  }, [project, onUpdateProject]);
+    try {
+      await startReconstructionJob(project.id);
+    } catch (e) {
+      console.warn("Backend job start note:", e);
+    }
+  }, [project?.id, project?.name, project?.video_filename, project?.video_resolution, onUpdateProject]);
 
   const lastProcessedTriggerRef = useRef<number>(0);
+  const initialSyncedRef = useRef<boolean>(false);
 
   // Handle auto-start trigger from quick controls (fires ONCE per trigger)
   useEffect(() => {
@@ -90,14 +95,15 @@ export function ReconstructionWorkspace({
     }
   }, [autoStartTrigger, handleStart, isRunning]);
 
-  // Initial stage completion sync
+  // Initial stage completion sync for already completed projects
   useEffect(() => {
-    if (project?.status === "COMPLETED" && !isRunning && completedStages.size === 0) {
+    if (project?.status === "COMPLETED" && !isRunning && !initialSyncedRef.current) {
+      initialSyncedRef.current = true;
       setCompletedStages(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]));
       setActiveStageIdx(8);
       setStageProgress(100);
     }
-  }, [project?.id, project?.status, isRunning, completedStages.size]);
+  }, [project?.status, isRunning]);
 
   // Notify parent of state changes for Console & Header sync
   useEffect(() => {
@@ -130,7 +136,6 @@ export function ReconstructionWorkspace({
             const nextIdx = activeStageIdx + 1;
             setActiveStageIdx(nextIdx);
 
-            // Log stage progression
             const stageLogs = [
               `Completed Stage ${activeStageIdx + 1}: ${stagesDef[activeStageIdx].name}`,
               `Starting Stage ${nextIdx + 1}: ${stagesDef[nextIdx].name} (${stagesDef[nextIdx].defaultOutput})`,
@@ -161,7 +166,7 @@ export function ReconstructionWorkspace({
     }, 400);
 
     return () => clearInterval(interval);
-  }, [isRunning, isPaused, activeStageIdx, project, onUpdateProject, pushLog]);
+  }, [isRunning, isPaused, activeStageIdx, project?.id, onUpdateProject, pushLog]);
 
   const handlePause = () => {
     setIsPaused(true);

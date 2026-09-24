@@ -135,7 +135,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     sceneRef.current = scene;
 
     // Camera with ultra-wide frustum clipping planes
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 500000);
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 20000);
     camera.position.set(50, 40, 60);
     cameraRef.current = camera;
 
@@ -143,13 +143,13 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: false,
+        antialias: true,
         alpha: false,
         powerPreference: "high-performance",
-        precision: "mediump",
+        precision: "highp",
         stencil: false,
         depth: true,
-        preserveDrawingBuffer: false,
+        preserveDrawingBuffer: true,
       });
     } catch (e) {
       renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, precision: "lowp" });
@@ -337,17 +337,17 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
     const maxDim = Math.max(size.x, size.y, size.z) || 60;
 
     const fov = cameraRef.current.fov * (Math.PI / 180);
-    let cameraDist = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.5;
-    cameraDist = Math.max(cameraDist, 40);
+    let cameraDist = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 0.85;
+    cameraDist = Math.max(cameraDist, 25);
 
-    cameraRef.current.position.set(center.x + cameraDist * 0.7, center.y + cameraDist * 0.5, center.z + cameraDist * 0.8);
-    cameraRef.current.near = 0.1;
-    cameraRef.current.far = 500000;
+    cameraRef.current.position.set(center.x + cameraDist * 0.75, center.y + cameraDist * 0.55, center.z + cameraDist * 0.85);
+    cameraRef.current.near = 0.5;
+    cameraRef.current.far = 20000;
     cameraRef.current.updateProjectionMatrix();
 
     controlsRef.current.target.copy(center);
-    controlsRef.current.maxDistance = 200000;
-    controlsRef.current.minDistance = 0.1;
+    controlsRef.current.maxDistance = 10000;
+    controlsRef.current.minDistance = 0.5;
     controlsRef.current.update();
   };
 
@@ -401,29 +401,35 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
             }
 
             const gltfMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-            const texMap = (gltfMat as any)?.map || null;
+            let finalMat: THREE.Material;
 
-            if (texMap) {
-              texMap.colorSpace = THREE.SRGBColorSpace;
-              texMap.wrapS = THREE.RepeatWrapping;
-              texMap.wrapT = THREE.RepeatWrapping;
-              texMap.generateMipmaps = true;
-              texMap.minFilter = THREE.LinearMipmapLinearFilter;
-              texMap.magFilter = THREE.LinearFilter;
-              texMap.needsUpdate = true;
+            if (gltfMat && (gltfMat as any).isMaterial) {
+              const mat = gltfMat as any;
+              mat.side = THREE.DoubleSide;
+              mat.wireframe = false;
+              if (mat.map) {
+                mat.map.colorSpace = THREE.SRGBColorSpace;
+                mat.map.wrapS = THREE.RepeatWrapping;
+                mat.map.wrapT = THREE.RepeatWrapping;
+                mat.map.needsUpdate = true;
+              }
+              if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                mat.roughness = 0.4;
+                mat.metalness = 0.1;
+              }
+              mat.needsUpdate = true;
+              finalMat = mat;
+            } else {
+              finalMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(modelColor),
+                side: THREE.DoubleSide,
+                roughness: 0.4,
+                metalness: 0.1,
+              });
             }
 
-            const texturedMat = new THREE.MeshStandardMaterial({
-              map: texMap || null,
-              color: texMap ? new THREE.Color(0xffffff) : new THREE.Color(modelColor),
-              emissive: new THREE.Color(0x333333), // Ambient self-illumination fill
-              roughness: 0.5,
-              metalness: 0.1,
-              side: THREE.DoubleSide,
-            });
-
-            mesh.material = texturedMat;
-            originalMaterialsRef.current.set(mesh, texturedMat);
+            mesh.material = finalMat;
+            originalMaterialsRef.current.set(mesh, finalMat);
           }
         });
 
@@ -434,6 +440,13 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject }: Th
           vertices: vertCount,
           faces: Math.round(faceCount),
         });
+
+        // Remove any stale wrapper groups
+        const oldWrapper = sceneRef.current?.getObjectByName("ModelWrapperGroup");
+        if (oldWrapper) {
+          disposeHierarchy(oldWrapper);
+          sceneRef.current?.remove(oldWrapper);
+        }
 
         // Wrap model in container Group for rock-solid centering & scaling
         model.updateMatrixWorld(true);
