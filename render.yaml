@@ -17,11 +17,20 @@ services:
   - type: web
     name: ascentx-frontend
     env: static
-    buildCommand: npm run build
+    buildCommand: NODE_OPTIONS="--max-old-space-size=4096" npm run build
     staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=4096"
       - key: VITE_API_BASE_URL
         fromService:
           type: web
           name: ascentx-backend
           property: url
+
