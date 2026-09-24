@@ -10,9 +10,17 @@ class ProjectCreate(BaseModel):
 class ProjectSummary(BaseModel):
     id: str
     name: str
+    description: Optional[str] = None
     created_at: str
     status: str  # CREATED, UPLOADED, ANALYZED, RECONSTRUCTED, COMPLETED
+    coordinate_system: str = "WGS84 / UTM Zone 33N"
     video_filename: Optional[str] = None
+    video_url: Optional[str] = None
+    video_resolution: Optional[str] = None
+    video_fps: Optional[float] = None
+    video_duration_sec: Optional[float] = None
+    video_file_size_mb: Optional[float] = None
+    video_codec: Optional[str] = None
     total_frames: int = 0
     selected_frames: int = 0
     sparse_points: int = 0
@@ -20,6 +28,12 @@ class ProjectSummary(BaseModel):
     has_gps: bool = False
     has_imu: bool = False
     has_calibration: bool = False
+    camera_model: Optional[str] = None
+    camera_focal_mm: Optional[float] = None
+    latitude_deg: Optional[float] = None
+    longitude_deg: Optional[float] = None
+    altitude_m: Optional[float] = None
+    flight_speed_mps: Optional[float] = None
 
 class VideoMetadata(BaseModel):
     filename: str

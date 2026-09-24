@@ -21,6 +21,12 @@ export interface Project {
   status: string;
   coordinate_system: string;
   video_filename?: string;
+  video_url?: string;
+  video_resolution?: string;
+  video_fps?: number;
+  video_duration_sec?: number;
+  video_file_size_mb?: number;
+  video_codec?: string;
   total_frames: number;
   selected_frames: number;
   sparse_points: number;
@@ -28,6 +34,12 @@ export interface Project {
   has_gps: boolean;
   has_imu: boolean;
   has_calibration: boolean;
+  camera_model?: string;
+  camera_focal_mm?: number;
+  latitude_deg?: number;
+  longitude_deg?: number;
+  altitude_m?: number;
+  flight_speed_mps?: number;
 }
 
 export interface FrameMetric {

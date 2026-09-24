@@ -21,8 +21,14 @@ export function Sidebar({ activeSection, setActiveSection }: SidebarProps) {
 
   return (
     <aside className="w-56 border-r flex flex-col flex-shrink-0" style={{ background: "#131418", borderColor: "#2a2b31" }}>
-      <div className="p-3 border-b" style={{ borderColor: "#1f2025" }}>
+      <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: "#1f2025" }}>
         <span className="stat-label" style={{ color: "#4a4d5a" }}>WORKFLOW PIPELINE</span>
+        <button
+          onClick={() => setActiveSection("project")}
+          className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 text-[9px] font-mono cursor-pointer"
+        >
+          📂 FOLDER
+        </button>
       </div>
       <nav className="flex-1 py-2 overflow-y-auto">
         {sections.map((s) => {

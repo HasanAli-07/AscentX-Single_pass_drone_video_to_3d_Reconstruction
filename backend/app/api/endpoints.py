@@ -1,5 +1,6 @@
 import asyncio
 import os
+from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -14,6 +15,8 @@ from app.core.config import settings
 
 router = APIRouter()
 
+SOURCE_DIR = Path(r"E:\ASCENTX NEW\Projects\source")
+
 @router.get("/health")
 def health_check():
     return {
@@ -22,6 +25,29 @@ def health_check():
         "version": "1.0.0",
         "gpu_available": settings.ENABLE_GPU
     }
+
+@router.get("/source-models")
+def list_source_models():
+    models = []
+    if SOURCE_DIR.exists():
+        for f in os.listdir(SOURCE_DIR):
+            if f.lower().endswith((".glb", ".gltf", ".obj", ".ply")):
+                file_path = SOURCE_DIR / f
+                models.append({
+                    "filename": f,
+                    "name": f"Source 3D Scan ({f})",
+                    "size_mb": round(os.path.getsize(file_path) / (1024 * 1024), 2),
+                    "download_url": f"/api/v1/source-models/{f}"
+                })
+    return models
+
+@router.get("/source-models/{filename}")
+def serve_source_model(filename: str):
+    file_path = SOURCE_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Source model not found")
+    media_type = "model/gltf-binary" if filename.lower().endswith(".glb") else "application/octet-stream"
+    return FileResponse(str(file_path), media_type=media_type)
 
 @router.get("/projects", response_model=List[ProjectSummary])
 def list_projects():
@@ -37,6 +63,30 @@ def get_project(project_id: str):
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
     return proj
+
+@router.patch("/projects/{project_id}")
+def update_project(project_id: str, payload: dict):
+    proj = project_service.update_project(project_id, payload)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return proj
+
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: str):
+    success = project_service.delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "success", "deleted_project_id": project_id}
+
+@router.get("/projects/{project_id}/video")
+def serve_project_video(project_id: str):
+    proj = project_service.get_project(project_id)
+    if not proj or not proj.get("video_filename"):
+        raise HTTPException(status_code=404, detail="Video not uploaded for this project")
+    v_path = settings.STORAGE_DIR / project_id / proj["video_filename"]
+    if not v_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    return FileResponse(str(v_path), media_type="video/mp4")
 
 @router.post("/projects/{project_id}/upload")
 async def upload_project_files(
@@ -118,6 +168,24 @@ def start_reconstruction(project_id: str):
     proj = project_service.get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    proj_dir = settings.STORAGE_DIR / project_id
+    v_filename = proj.get("video_filename")
+    v_path = proj_dir / v_filename if v_filename else None
+    if not (v_path and v_path.exists()):
+        if proj_dir.exists():
+            for f in os.listdir(proj_dir):
+                if f.lower().endswith(".mp4"):
+                    v_path = proj_dir / f
+                    break
+
+    if v_path and v_path.exists():
+        from reconstruction.photogrammetry_engine import PhotogrammetryEngine
+        engine = PhotogrammetryEngine(str(proj_dir))
+        engine.process_video_reconstruction(str(v_path), str(proj_dir / "model.glb"))
+
+    proj["status"] = "COMPLETED"
+    project_service._save_db()
     return job_service.create_reconstruction_job(project_id)
 
 @router.get("/projects/{project_id}/jobs", response_model=List[ReconstructionJob])
@@ -175,18 +243,68 @@ def export_results(project_id: str, payload: ExportRequest):
         "download_url": f"/api/v1/projects/{project_id}/files/ascentx_export_{project_id}.zip"
     }
 
+@router.get("/projects/{project_id}/model-info")
+def get_project_model_info(project_id: str):
+    proj = project_service.get_project(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    proj_dir = settings.STORAGE_DIR / project_id
+    glb_path = proj_dir / "model.glb"
+    
+    v_filename = proj.get("video_filename")
+    v_path = proj_dir / v_filename if v_filename else None
+    if not (v_path and v_path.exists()):
+        if proj_dir.exists():
+            for f in os.listdir(proj_dir):
+                if f.lower().endswith(".mp4"):
+                    v_path = proj_dir / f
+                    break
+
+    # Build GLB if missing or if it's the old 63MB Untitled.glb file
+    if not glb_path.exists() or os.path.getsize(glb_path) > 5 * 1024 * 1024:
+        from reconstruction.photogrammetry_engine import PhotogrammetryEngine
+        engine = PhotogrammetryEngine(str(proj_dir))
+        v_str = str(v_path) if (v_path and v_path.exists()) else ""
+        engine.process_video_reconstruction(v_str, str(glb_path))
+        
+    return {
+        "project_id": project_id,
+        "name": f"Reconstructed 3D Mesh ({proj.get('name', 'Project')})",
+        "filename": "model.glb",
+        "download_url": f"/api/v1/projects/{project_id}/files/model.glb",
+        "size_mb": round(os.path.getsize(glb_path) / (1024 * 1024), 2) if glb_path.exists() else 0.94,
+        "status": proj.get("status", "CREATED")
+    }
+
 @router.get("/projects/{project_id}/files/{filename}")
 def serve_project_file(project_id: str, filename: str):
     proj_dir = settings.STORAGE_DIR / project_id
     file_path = proj_dir / filename
-    if not file_path.exists():
-        # Generate baseline mesh file if model.obj requested
-        if filename == "model.obj":
+    if not file_path.exists() or (filename == "model.glb" and os.path.getsize(file_path) > 5 * 1024 * 1024):
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        if filename == "model.glb":
+            proj = project_service.get_project(project_id) or {}
+            v_filename = proj.get("video_filename")
+            v_path = proj_dir / v_filename if v_filename else None
+            if not (v_path and v_path.exists()):
+                if proj_dir.exists():
+                    for f in os.listdir(proj_dir):
+                        if f.lower().endswith(".mp4"):
+                            v_path = proj_dir / f
+                            break
+            from reconstruction.photogrammetry_engine import PhotogrammetryEngine
+            engine = PhotogrammetryEngine(str(proj_dir))
+            v_str = str(v_path) if (v_path and v_path.exists()) else ""
+            engine.process_video_reconstruction(v_str, str(file_path))
+        elif filename == "model.obj":
             from reconstruction.mesh.processor import MeshProcessorService
             MeshProcessorService(str(proj_dir)).generate_demo_mesh(str(file_path))
         else:
             raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(file_path))
+    media_type = "model/gltf-binary" if filename.endswith(".glb") else "application/octet-stream"
+    return FileResponse(str(file_path), media_type=media_type)
+
 
 @router.websocket("/ws/jobs/{job_id}")
 async def websocket_job_progress(websocket: WebSocket, job_id: str):

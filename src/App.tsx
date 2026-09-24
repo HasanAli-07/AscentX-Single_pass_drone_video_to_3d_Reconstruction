@@ -3,12 +3,21 @@ import { Section, DisplayMode, ViewToggle, Project } from "./types";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { Console } from "./components/Console";
-import { MeshViewport } from "./viewer/MeshViewport";
+import { ThreeGLBViewer } from "./viewer/ThreeGLBViewer";
 import { SectionHeader, StatRow, Badge, Btn } from "./components/SharedPrimitives";
-import { fetchHealth, fetchProjects } from "./services/api";
+import { fetchHealth, fetchProjects, createProject } from "./services/api";
+
+import { ProjectWorkspace } from "./pages/ProjectWorkspace";
+import { InputWorkspace } from "./pages/InputWorkspace";
+import { FrameWorkspace } from "./pages/FrameWorkspace";
+import { ReconstructionWorkspace, ReconstructionState } from "./pages/ReconstructionWorkspace";
+import { GeorefWorkspace } from "./pages/GeorefWorkspace";
+import { ExportWorkspace } from "./pages/ExportWorkspace";
+
+import { ProjectFolderManager } from "./components/ProjectFolderManager";
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState<Section>("project");
+  const [activeSection, setActiveSection] = useState<Section>("visualization");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("TEXTURED");
   const [activeToggles, setActiveToggles] = useState<Set<ViewToggle>>(
     new Set(["grid", "axes", "cameras", "flightpath", "bbox"])
@@ -16,15 +25,31 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [apiConnected, setApiConnected] = useState<boolean>(false);
+  const [autoStartTrigger, setAutoStartTrigger] = useState<number>(0);
+  const [showFolderHub, setShowFolderHub] = useState<boolean>(false);
+  const [reconstructionState, setReconstructionState] = useState<ReconstructionState>({
+    isRunning: false,
+    isPaused: false,
+    stageName: "",
+    stageIndex: 0,
+    progress: 0,
+    logs: [],
+  });
+
+  const refreshProjectList = () => {
+    fetchProjects().then((list) => {
+      setProjects(list);
+      if (list.length > 0 && (!activeProject || !list.find((p) => p.id === activeProject.id))) {
+        setActiveProject(list[0]);
+      }
+    });
+  };
 
   useEffect(() => {
     fetchHealth().then((res) => {
       setApiConnected(res.status === "online");
     });
-    fetchProjects().then((list) => {
-      setProjects(list);
-      if (list.length > 0) setActiveProject(list[0]);
-    });
+    refreshProjectList();
   }, []);
 
   const toggleView = (toggle: ViewToggle) => {
@@ -36,17 +61,82 @@ export default function App() {
     });
   };
 
+  const handleUpdateActiveProject = (updated: Project) => {
+    setActiveProject(updated);
+    setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  };
+
+  const handleCreateNewProject = async () => {
+    const defaultName = `scan_session_${new Date().toISOString().slice(0, 10).replace(/-/g, "_")}`;
+    const newProj = await createProject(defaultName, "Single-Pass Drone Video Survey");
+    setProjects((prev) => [newProj, ...prev]);
+    setActiveProject(newProj);
+    setActiveSection("input");
+  };
+
+  const handleStartReconstructionFromQuickControls = () => {
+    setActiveSection("reconstruction");
+    setAutoStartTrigger(Date.now());
+  };
+
+  const renderActiveWorkspace = () => {
+    switch (activeSection) {
+      case "project":
+        return (
+          <ProjectWorkspace
+            project={activeProject}
+            onNavigate={setActiveSection}
+            onUpdateProject={handleUpdateActiveProject}
+          />
+        );
+      case "input":
+        return (
+          <InputWorkspace
+            project={activeProject}
+            onUpdateProject={handleUpdateActiveProject}
+            onNavigate={setActiveSection}
+          />
+        );
+      case "frames":
+        return <FrameWorkspace project={activeProject} onNavigate={setActiveSection} />;
+      case "reconstruction":
+        return (
+          <ReconstructionWorkspace
+            project={activeProject}
+            onUpdateProject={handleUpdateActiveProject}
+            onNavigate={setActiveSection}
+            autoStartTrigger={autoStartTrigger}
+            onStateChange={setReconstructionState}
+          />
+        );
+      case "georef":
+        return <GeorefWorkspace project={activeProject} />;
+      case "export":
+        return <ExportWorkspace project={activeProject} />;
+      case "visualization":
+      case "analysis":
+      case "measurements":
+      case "reports":
+      default:
+        return <ThreeGLBViewer displayMode={displayMode} activeToggles={activeToggles} activeProject={activeProject} />;
+
+    }
+  };
+
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden text-slate-200" style={{ background: "#0d0e11" }}>
       {/* Header Bar */}
       <Header
-        projectName={activeProject?.name || "scan_session_2024_11_08"}
+        projects={projects}
+        activeProject={activeProject}
+        onSelectProject={(p) => setActiveProject(p)}
         displayMode={displayMode}
         setDisplayMode={setDisplayMode}
         activeToggles={activeToggles}
         toggleView={toggleView}
         onExport={() => setActiveSection("export")}
-        onNewProject={() => setActiveSection("input")}
+        onNewProject={handleCreateNewProject}
+        onOpenFolderHub={() => setShowFolderHub(true)}
       />
 
       {/* Main Workspace Area */}
@@ -54,38 +144,42 @@ export default function App() {
         {/* Left Workflow Pipeline Sidebar */}
         <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
 
-        {/* Central 3D Canvas / Viewport */}
-        <main className="flex-1 relative flex flex-col overflow-hidden">
-          <MeshViewport displayMode={displayMode} activeToggles={activeToggles} />
+        {/* Central Dynamic Workspace Panel */}
+        <main className="flex-1 relative flex flex-col overflow-hidden bg-[#0d0e11]">
+          {renderActiveWorkspace()}
         </main>
 
-        {/* Right Sidebar Inspector Panel */}
+        {/* Right Sidebar Inspector Panel - Synchronized with Active Project */}
         <aside className="w-80 border-l flex flex-col flex-shrink-0 overflow-y-auto p-4 gap-4" style={{ background: "#131418", borderColor: "#2a2b31" }}>
-          {/* Active Project & API Status Card */}
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="stat-label" style={{ color: "#4a4d5a" }}>PROJECT METRIC SUMMARY</span>
+              <span className="stat-label text-slate-400 font-semibold">ACTIVE PROJECT METRICS</span>
               <Badge label={apiConnected ? "API ONLINE" : "STANDALONE"} variant={apiConnected ? "ok" : "warn"} />
             </div>
-            <StatRow label="Project ID" value={activeProject?.id || "PRJ-20241108-004A"} />
-            <StatRow label="Single-Pass Flight" value="COMPLETED" accent />
-            <StatRow label="Sample Rate" value="15.8% (229 / 350)" />
-            <StatRow label="Camera Model" value="DJI FC3411 (24mm)" />
-            <StatRow label="Sparse Points" value="184,392 pts" />
-            <StatRow label="Dense Cloud" value="4.2M pts" accent />
+            <StatRow label="Project Name" value={activeProject?.name || "Unassigned"} accent />
+            <StatRow label="Project ID" value={activeProject?.id || "N/A"} />
+            <StatRow label="Pipeline Status" value={activeProject?.status || "CREATED"} accent />
+            <StatRow label="Input Video" value={activeProject?.video_filename || "Not Uploaded"} />
+            <StatRow label="Video Resolution" value={activeProject?.video_resolution || "N/A"} />
+            <StatRow label="Camera Model" value={activeProject?.camera_model || "N/A"} />
+            <StatRow label="Extracted Frames" value={(activeProject?.total_frames || 0).toLocaleString()} />
+            <StatRow label="Selected Keys" value={(activeProject?.selected_frames || 0).toLocaleString()} accent={!!activeProject?.selected_frames} />
+            <StatRow label="Sparse Points" value={`${(activeProject?.sparse_points || 0).toLocaleString()} pts`} />
+            <StatRow label="Dense Cloud" value={activeProject?.dense_points ? `${(activeProject.dense_points / 1000000).toFixed(1)}M pts` : "0 pts"} accent={!!activeProject?.dense_points} />
           </div>
 
-          {/* Quick Action Controls */}
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
-            <SectionHeader title="STAGE CONTROLS" />
+            <SectionHeader title="STAGE QUICK CONTROLS" />
             <div className="flex flex-col gap-2 mt-2">
-              <Btn label="RE-RUN FRAME INTELLIGENCE" variant="secondary" onClick={() => setActiveSection("frames")} />
-              <Btn label="START SfM & MVS" variant="primary" onClick={() => setActiveSection("reconstruction")} />
-              <Btn label="APPLY GEOREFERENCING" variant="ghost" onClick={() => setActiveSection("georef")} />
+              <Btn label="01 EDIT PROJECT DETAILS" variant="secondary" onClick={() => setActiveSection("project")} />
+              <Btn label="02 UPLOAD DRONE VIDEO" variant="primary" onClick={() => setActiveSection("input")} />
+              <Btn label="03 RUN FRAME SELECTION" variant="secondary" onClick={() => setActiveSection("frames")} />
+              <Btn label="04 START RECONSTRUCTION" variant="primary" onClick={handleStartReconstructionFromQuickControls} />
+              <Btn label="06 GEOREFERENCING" variant="ghost" onClick={() => setActiveSection("georef")} />
+              <Btn label="07 VIEW 3D CUSTOMIZER" variant="secondary" onClick={() => setActiveSection("visualization")} />
             </div>
           </div>
 
-          {/* Reconstruction Confidence Overview */}
           <div className="rounded-lg p-3" style={{ background: "#18191d", border: "1px solid #2a2b31" }}>
             <SectionHeader title="RECONSTRUCTION CONFIDENCE" />
             <div className="flex flex-col gap-2 mt-2">
@@ -110,8 +204,21 @@ export default function App() {
         </aside>
       </div>
 
-      {/* Bottom Processing & Log Console */}
-      <Console />
+      {/* Bottom Processing Console */}
+      <Console activeProject={activeProject} reconstructionState={reconstructionState} />
+
+      {/* Interactive Project Folder Storage Hub Modal */}
+      {showFolderHub && (
+        <ProjectFolderManager
+          projects={projects}
+          activeProject={activeProject}
+          onSelectProject={(p) => setActiveProject(p)}
+          onRefreshProjects={refreshProjectList}
+          onClose={() => setShowFolderHub(false)}
+          onNavigate={setActiveSection}
+        />
+      )}
     </div>
   );
 }
+

@@ -74,16 +74,30 @@ class ProjectService:
             ProjectSummary(
                 id=p["id"],
                 name=p["name"],
+                description=p.get("description"),
                 created_at=p["created_at"],
                 status=p["status"],
+                coordinate_system=p.get("coordinate_system", "WGS84 / UTM Zone 33N"),
                 video_filename=p.get("video_filename"),
+                video_url=p.get("video_url"),
+                video_resolution=p.get("video_resolution"),
+                video_fps=p.get("video_fps"),
+                video_duration_sec=p.get("video_duration_sec"),
+                video_file_size_mb=p.get("video_file_size_mb"),
+                video_codec=p.get("video_codec"),
                 total_frames=p.get("total_frames", 0),
                 selected_frames=p.get("selected_frames", 0),
                 sparse_points=p.get("sparse_points", 0),
                 dense_points=p.get("dense_points", 0),
                 has_gps=p.get("has_gps", False),
                 has_imu=p.get("has_imu", False),
-                has_calibration=p.get("has_calibration", False)
+                has_calibration=p.get("has_calibration", False),
+                camera_model=p.get("camera_model"),
+                camera_focal_mm=p.get("camera_focal_mm"),
+                latitude_deg=p.get("latitude_deg"),
+                longitude_deg=p.get("longitude_deg"),
+                altitude_m=p.get("altitude_m"),
+                flight_speed_mps=p.get("flight_speed_mps")
             ) for p in self._projects.values()
         ]
 
@@ -114,7 +128,41 @@ class ProjectService:
         }
         self._projects[proj_id] = proj
         self._save_db()
+        
+        # Save project_meta.json inside dedicated project folder
+        proj_dir = settings.STORAGE_DIR / proj_id
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        with open(proj_dir / "project_meta.json", "w") as f:
+            json.dump(proj, f, indent=2)
+            
         return proj
+
+    def update_project(self, project_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        proj = self.get_project(project_id)
+        if not proj:
+            return None
+        for k, v in updates.items():
+            proj[k] = v
+        self._save_db()
+        
+        proj_dir = settings.STORAGE_DIR / project_id
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        with open(proj_dir / "project_meta.json", "w") as f:
+            json.dump(proj, f, indent=2)
+            
+        return proj
+
+    def delete_project(self, project_id: str) -> bool:
+        if project_id in self._projects:
+            del self._projects[project_id]
+            self._save_db()
+            
+            proj_dir = settings.STORAGE_DIR / project_id
+            if proj_dir.exists():
+                import shutil
+                shutil.rmtree(proj_dir, ignore_errors=True)
+            return True
+        return False
 
     def run_frame_analysis(self, project_id: str) -> FrameAnalysisResult:
         proj = self.get_project(project_id)
