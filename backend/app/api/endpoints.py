@@ -261,8 +261,8 @@ def get_project_model_info(project_id: str):
                     v_path = proj_dir / f
                     break
 
-    # Build GLB if missing or if it's the old 63MB Untitled.glb file
-    if not glb_path.exists() or os.path.getsize(glb_path) > 5 * 1024 * 1024:
+    # Build GLB if missing for this project
+    if not glb_path.exists():
         from reconstruction.photogrammetry_engine import PhotogrammetryEngine
         engine = PhotogrammetryEngine(str(proj_dir))
         v_str = str(v_path) if (v_path and v_path.exists()) else ""
@@ -281,7 +281,7 @@ def get_project_model_info(project_id: str):
 def serve_project_file(project_id: str, filename: str):
     proj_dir = settings.STORAGE_DIR / project_id
     file_path = proj_dir / filename
-    if not file_path.exists() or (filename == "model.glb" and os.path.getsize(file_path) > 5 * 1024 * 1024):
+    if not file_path.exists():
         proj_dir.mkdir(parents=True, exist_ok=True)
         if filename == "model.glb":
             proj = project_service.get_project(project_id) or {}

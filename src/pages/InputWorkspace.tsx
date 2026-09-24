@@ -64,6 +64,9 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
       try {
         const glbRes = await generate3DModelFromVideo(objectUrl);
         customGlbUrl = glbRes.glbBlobUrl;
+        try {
+          localStorage.setItem(`ascentx_glb_${project.id}`, glbRes.glbBlobUrl);
+        } catch (e) {}
       } catch (e) {
         console.warn("Video GLB generation note:", e);
       }

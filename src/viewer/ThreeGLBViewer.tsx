@@ -48,38 +48,41 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
   // Fetch available models prioritizing current active project's reconstructed video model
   useEffect(() => {
     async function loadModels() {
+      if (!activeProject) return;
+
       const baseModels = await fetchSourceModels();
       let modelList: SourceModelInfo[] = [];
 
-      if (activeProject) {
-        if (activeProject.reconstructed_glb_url) {
-          modelList.push({
-            filename: `${activeProject.id}_reconstructed.glb`,
-            name: `Reconstructed Drone 3D Scan (${activeProject.name})`,
-            size_mb: 1.85,
-            download_url: activeProject.reconstructed_glb_url,
-          });
-        }
-        const projModel = await fetchProjectModelInfo(activeProject.id, activeProject.name);
-        modelList.push(projModel);
+      // 1. Check if localStorage has cached reconstructed GLB blob url for this active project
+      const cachedGlb = localStorage.getItem(`ascentx_glb_${activeProject.id}`);
+      const customGlbUrl = activeProject.reconstructed_glb_url || cachedGlb;
+
+      if (customGlbUrl) {
+        modelList.push({
+          filename: `${activeProject.id}_reconstructed.glb`,
+          name: `Reconstructed 3D Model (${activeProject.name})`,
+          size_mb: 1.85,
+          download_url: customGlbUrl,
+        });
       }
 
+      // 2. Fetch project model info from backend API
+      const projModel = await fetchProjectModelInfo(activeProject.id, activeProject.name);
+      modelList.push(projModel);
+
+      // 3. Fallback demo models appended at end of list
       modelList = [...modelList, ...baseModels];
       setSourceModels(modelList);
 
+      // 4. ALWAYS force selection to top model (the project's reconstructed model)!
       if (modelList.length > 0) {
-        const nextUrl = modelList[0].download_url;
-        setSelectedModelUrl((current) => {
-          if (!current || current.split("?")[0] !== nextUrl.split("?")[0]) {
-            return nextUrl;
-          }
-          return current;
-        });
-        setSelectedModelName(modelList[0].name);
+        const topModel = modelList[0];
+        setSelectedModelUrl(topModel.download_url);
+        setSelectedModelName(topModel.name);
       }
     }
     loadModels();
-  }, [activeProject?.id, activeProject?.name, activeProject?.reconstructed_glb_url]);
+  }, [activeProject?.id, activeProject?.name, activeProject?.reconstructed_glb_url, activeProject?.status]);
 
   // Dispose unneeded geometries, textures, materials to prevent VRAM memory leaks
   const disposeHierarchy = (object: THREE.Object3D) => {

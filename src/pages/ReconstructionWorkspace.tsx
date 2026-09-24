@@ -81,6 +81,9 @@ export function ReconstructionWorkspace({
         pushLog(`[3D Engine] ${stage} (${pct}%)`);
       }).then((res) => {
         pushLog(`[3D Engine] Custom Video 3D Model generated successfully (${res.sizeMb} MB, ${res.vertexCount} verts)!`);
+        try {
+          localStorage.setItem(`ascentx_glb_${project.id}`, res.glbBlobUrl);
+        } catch (e) {}
         if (project && onUpdateProject) {
           const updated: Project = {
             ...project,
