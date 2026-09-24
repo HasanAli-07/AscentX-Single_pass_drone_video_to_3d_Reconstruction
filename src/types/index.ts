@@ -40,6 +40,7 @@ export interface Project {
   longitude_deg?: number;
   altitude_m?: number;
   flight_speed_mps?: number;
+  reconstructed_glb_url?: string;
 }
 
 export interface FrameMetric {

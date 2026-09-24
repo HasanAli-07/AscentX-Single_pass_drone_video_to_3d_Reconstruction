@@ -52,6 +52,14 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
       let modelList: SourceModelInfo[] = [];
 
       if (activeProject) {
+        if (activeProject.reconstructed_glb_url) {
+          modelList.push({
+            filename: `${activeProject.id}_reconstructed.glb`,
+            name: `Reconstructed Drone 3D Scan (${activeProject.name})`,
+            size_mb: 1.85,
+            download_url: activeProject.reconstructed_glb_url,
+          });
+        }
         const projModel = await fetchProjectModelInfo(activeProject.id, activeProject.name);
         modelList.push(projModel);
       }
@@ -71,7 +79,7 @@ export function ThreeGLBViewer({ displayMode, activeToggles, activeProject, them
       }
     }
     loadModels();
-  }, [activeProject?.id, activeProject?.name]);
+  }, [activeProject?.id, activeProject?.name, activeProject?.reconstructed_glb_url]);
 
   // Dispose unneeded geometries, textures, materials to prevent VRAM memory leaks
   const disposeHierarchy = (object: THREE.Object3D) => {

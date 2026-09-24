@@ -3,6 +3,7 @@ import { Project } from "../types";
 import { StatRow, Badge, Btn } from "../components/SharedPrimitives";
 import { uploadProjectFiles, validateProjectInput, updateProjectDetails } from "../services/api";
 import { IconFolder, IconCheck, IconPlay, IconArrowRight } from "../components/Icons";
+import { generate3DModelFromVideo } from "../utils/photogrammetryGenerator";
 
 interface InputWorkspaceProps {
   project: Project | null;
@@ -58,6 +59,15 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
       // Upload to backend API if online
       await uploadProjectFiles(project.id, file);
 
+      // Generate custom 3D GLB model from video keyframes
+      let customGlbUrl: string | undefined = undefined;
+      try {
+        const glbRes = await generate3DModelFromVideo(objectUrl);
+        customGlbUrl = glbRes.glbBlobUrl;
+      } catch (e) {
+        console.warn("Video GLB generation note:", e);
+      }
+
       setUploadProgress(100);
       setIsUploading(false);
 
@@ -67,6 +77,7 @@ export function InputWorkspace({ project, onUpdateProject, onNavigate }: InputWo
         status: "UPLOADED",
         video_filename: file.name,
         video_url: objectUrl,
+        reconstructed_glb_url: customGlbUrl,
         video_resolution: `${width}×${height}`,
         video_fps: fps,
         video_duration_sec: durationSec,

@@ -3,6 +3,7 @@ import { Project } from "../types";
 import { Badge, Btn } from "../components/SharedPrimitives";
 import { startReconstructionJob, updateProjectDetails } from "../services/api";
 import { IconRefresh, IconPlay, IconPause, IconX, IconTarget, IconSparkles, IconCheck, IconArrowRight } from "../components/Icons";
+import { generate3DModelFromVideo } from "../utils/photogrammetryGenerator";
 
 export interface ReconstructionState {
   isRunning: boolean;
@@ -73,12 +74,33 @@ export function ReconstructionWorkspace({
       onUpdateProject({ ...project, status: "RECONSTRUCTING" });
     }
 
+    // Proactively generate custom 3D model GLB from uploaded video URL
+    const targetVideoUrl = project.video_url || "http://localhost:8000/api/v1/projects/" + project.id + "/video";
+    try {
+      generate3DModelFromVideo(targetVideoUrl, (pct, stage) => {
+        pushLog(`[3D Engine] ${stage} (${pct}%)`);
+      }).then((res) => {
+        pushLog(`[3D Engine] Custom Video 3D Model generated successfully (${res.sizeMb} MB, ${res.vertexCount} verts)!`);
+        if (project && onUpdateProject) {
+          const updated: Project = {
+            ...project,
+            reconstructed_glb_url: res.glbBlobUrl,
+          };
+          onUpdateProject(updated);
+        }
+      }).catch((e) => {
+        console.warn("Video 3D model generation note:", e);
+      });
+    } catch (e) {
+      console.warn("Video 3D model init note:", e);
+    }
+
     try {
       await startReconstructionJob(project.id);
     } catch (e) {
       console.warn("Backend job start note:", e);
     }
-  }, [project?.id, project?.name, project?.video_filename, project?.video_resolution, onUpdateProject]);
+  }, [project?.id, project?.name, project?.video_filename, project?.video_resolution, project?.video_url, onUpdateProject, pushLog]);
 
   const lastProcessedTriggerRef = useRef<number>(0);
   const initialSyncedRef = useRef<boolean>(false);
@@ -103,6 +125,15 @@ export function ReconstructionWorkspace({
       setCompletedStages(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8]));
       setActiveStageIdx(8);
       setStageProgress(100);
+
+      // Generate 3D model if completed project doesn't have custom GLB yet
+      if (project?.video_url && !project?.reconstructed_glb_url) {
+        generate3DModelFromVideo(project.video_url).then((res) => {
+          if (onUpdateProject) {
+            onUpdateProject({ ...project, reconstructed_glb_url: res.glbBlobUrl });
+          }
+        }).catch(() => {});
+      }
     }
   }, [project?.status, isRunning]);
 
